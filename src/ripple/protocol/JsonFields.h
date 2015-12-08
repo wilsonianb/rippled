@@ -290,6 +290,7 @@ JSS ( peer_authorized );            // out: AccountLines
 JSS ( peer_id );                    // out: LedgerProposal
 JSS ( peers );                      // out: InboundLedger, handlers/Peers, Overlay
 JSS ( port );                       // in: Connect
+JSS ( previous_hash );              // out: NetworkOPs
 JSS ( previous_ledger );            // out: LedgerPropose
 JSS ( proof );                      // in: BookOffers
 JSS ( propose_seq );                // out: LedgerPropose

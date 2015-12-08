@@ -1608,8 +1608,20 @@ void NetworkOPsImp::pubValidation (STValidation::ref val)
 
         jvObj [jss::type]                  = "validationReceived";
         jvObj [jss::validation_public_key] = val->getSignerPublic ().humanNodePublic ();
-        jvObj [jss::ledger_hash]           = to_string (val->getLedgerHash ());
         jvObj [jss::signature]             = strHex (val->getSignature ());
+
+        auto hash = val->getLedgerHash ();
+
+        jvObj [jss::ledger_hash]           = to_string (hash);
+
+        Ledger::pointer ledger = m_ledgerMaster.getLedgerByHash (hash);
+
+        if (!ledger)
+            ledger = app_.getInboundLedgers().acquire (
+                ledger, 0, InboundLedger::fcVALIDATION);
+
+        if (ledger)
+            jvObj [jss::previous_hash]     = to_string (ledger->info().parentHash);
 
         std::uint32_t seq = val->getFieldU32 (sfLedgerSequence);
 
