@@ -2574,8 +2574,6 @@
     </ClInclude>
     <ClInclude Include="..\..\src\ripple\protocol\LedgerFormats.h">
     </ClInclude>
-    <ClInclude Include="..\..\src\ripple\protocol\PayChan.h">
-    </ClInclude>
     <ClInclude Include="..\..\src\ripple\protocol\Protocol.h">
     </ClInclude>
     <ClInclude Include="..\..\src\ripple\protocol\PublicKey.h">
