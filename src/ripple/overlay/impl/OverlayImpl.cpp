@@ -20,7 +20,6 @@
 #include <BeastConfig.h>
 #include <ripple/app/misc/HashRouter.h>
 #include <ripple/app/misc/NetworkOPs.h>
-#include <ripple/core/ConfigSections.h>
 #include <ripple/core/DatabaseCon.h>
 #include <ripple/basics/contract.h>
 #include <ripple/basics/Log.h>
@@ -480,57 +479,6 @@ OverlayImpl::checkStopped ()
 }
 
 void
-OverlayImpl::setupValidatorKeyManifests (BasicConfig const& config,
-                                         DatabaseCon& db)
-{
-    auto const loaded = manifestCache_.loadValidatorKeys (
-        config.section (SECTION_VALIDATOR_KEYS),
-        journal_);
-
-    if (!loaded)
-        Throw<std::runtime_error> (
-            "Unable to load keys from [" SECTION_VALIDATOR_KEYS "]");
-
-    auto const& validation_manifest =
-        config.section (SECTION_VALIDATION_MANIFEST);
-
-    if (! validation_manifest.lines().empty())
-    {
-        std::string s;
-        s.reserve (Manifest::textLength);
-        for (auto const& line : validation_manifest.lines())
-            s += beast::rfc2616::trim(line);
-        if (auto mo = make_Manifest (beast::detail::base64_decode(s)))
-        {
-            manifestCache_.configManifest (
-                std::move (*mo),
-                app_.validators(),
-                journal_);
-        }
-        else
-        {
-            Throw<std::runtime_error> ("Malformed manifest in config");
-        }
-    }
-    else
-    {
-        JLOG(journal_.debug()) << "No [" SECTION_VALIDATION_MANIFEST <<
-            "] section in config";
-    }
-
-    manifestCache_.load (
-        db,
-        app_.validators(),
-        journal_);
-}
-
-void
-OverlayImpl::saveValidatorKeyManifests (DatabaseCon& db) const
-{
-    manifestCache_.save (db);
-}
-
-void
 OverlayImpl::onPrepare()
 {
     PeerFinder::Config config;
@@ -714,21 +662,23 @@ OverlayImpl::onManifests (
     {
         auto& s = m->list ().Get (i).stobject ();
 
-        if (auto mo = make_Manifest (s))
+        if (auto mo = Manifest::make_Manifest (s))
         {
             uint256 const hash = mo->hash ();
             if (!hashRouter.addSuppressionPeer (hash, from->id ()))
                 continue;
 
             auto const serialized = mo->serialized;
-            auto const result = manifestCache_.applyManifest (
+            auto const result = app_.manifestCache ().applyManifest (
                 std::move(*mo),
-                app_.validators(),
-                journal);
+                app_.validators());
 
             if (result == ManifestDisposition::accepted ||
                     result == ManifestDisposition::untrusted)
-                app_.getOPs().pubManifest (*make_Manifest(serialized));
+            {
+                app_.getOPs().pubManifest (
+                    *Manifest::make_Manifest(serialized));
+            }
 
             if (result == ManifestDisposition::accepted)
             {

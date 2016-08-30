@@ -216,7 +216,7 @@ int run (int argc, char** argv)
     ("unittest-arg", po::value <std::string> ()->implicit_value (""), "Supplies argument to unit tests.")
     ("parameters", po::value< vector<string> > (), "Specify comma separated parameters.")
     ("quiet,q", "Reduce diagnotics.")
-    ("quorum", po::value <int> (), "Set the validation quorum.")
+    ("quorum", po::value <std::size_t> (), "Override the minimum validation quorum.")
     ("silent", "No output to the console after startup.")
     ("verbose,v", "Verbose logging.")
     ("load", "Load the current ledger from the local DB.")
@@ -336,9 +336,6 @@ int run (int argc, char** argv)
         }
 
         config->START_UP = Config::NETWORK;
-
-        if (config->VALIDATION_QUORUM < 2)
-            config->VALIDATION_QUORUM = 2;
     }
 
     // Override the RPC destination IP address. This must
@@ -383,11 +380,7 @@ int run (int argc, char** argv)
     {
         try
         {
-            config->VALIDATION_QUORUM = vm["quorum"].as <int> ();
-            config->LOCK_QUORUM = true;
-
-            if (config->VALIDATION_QUORUM < 0)
-                Throw<std::domain_error> ("");
+            config->VALIDATION_QUORUM = vm["quorum"].as <std::size_t> ();
         }
         catch(std::exception const&)
         {
