@@ -258,26 +258,6 @@ struct PayChan_test : public beast::unit_test::suite
             ter (tecUNFUNDED));
 
         {
-            // src disallows XRP
-            env (fset (alice, asfDisallowXRP));
-            env (create (
-                alice, bob, XRP (1000), settleDelay, alice.pk (), bob.pk ()),
-                    ter (tecNO_TARGET));
-            auto const chan = channel (*env.current (), alice, bob);
-            BEAST_EXPECT (!channelExists (*env.current (), chan));
-            env (fclear (alice, asfDisallowXRP));
-        }
-        {
-            // dst disallows XRP
-            env (fset (bob, asfDisallowXRP));
-            env (create (
-                alice, bob, XRP (1000), settleDelay, alice.pk (), bob.pk ()),
-                    ter (tecNO_TARGET));
-            auto const chan = channel (*env.current (), alice, bob);
-            BEAST_EXPECT (!channelExists (*env.current (), chan));
-            env (fclear (bob, asfDisallowXRP));
-        }
-        {
             // Create channel
             auto const preAlice = env.balance (alice);
             auto const preBob = env.balance (bob);

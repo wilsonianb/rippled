@@ -194,9 +194,6 @@ PayChanCreate::preclaim(PreclaimContext const &ctx)
     auto const account = ctx.tx[sfAccount];
     auto const sle = ctx.view.read (keylet::account (account));
 
-    if ((*sle)[sfFlags] & lsfDisallowXRP)
-        return tecNO_TARGET;
-
     // Check reserve and funds availability
     {
         auto const balance = (*sle)[sfBalance];
@@ -217,8 +214,6 @@ PayChanCreate::preclaim(PreclaimContext const &ctx)
         auto const sled = ctx.view.read (keylet::account (dst));
         if (!sled)
             return tecNO_DST;
-        if ((*sled)[sfFlags] & lsfDisallowXRP)
-            return tecNO_TARGET;
     }
 
     return tesSUCCESS;
