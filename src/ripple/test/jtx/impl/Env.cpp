@@ -538,6 +538,9 @@ Json::Value
 Env::do_rpc(std::vector<std::string> const& args)
 {
     auto const jv = cmdLineToJSONRPC(args, journal);
+    if (jv.isMember (jss::error))
+        return jv;
+
     return client().invoke(jv["method"].asString(),
         jv["params"][0U]);
 }

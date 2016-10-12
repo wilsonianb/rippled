@@ -1194,22 +1194,31 @@ rpcCmdLineToJson (std::vector<std::string> const& args,
 Json::Value
 cmdLineToJSONRPC (std::vector<std::string> const& args, beast::Journal j)
 {
-    Json::Value jv = Json::Value (Json::objectValue);
-    auto const paramsObj = rpcCmdLineToJson (args, jv, j);
+    Json::Value jvRpc = Json::Value (Json::objectValue);
+    auto const paramsObj = rpcCmdLineToJson (args, jvRpc, j);
 
-    // Re-use jv to return our formatted result.
-    jv.clear();
+    Json::Value jv;
 
-    // Allow parser to rewrite method.
-    jv[jss::method] = paramsObj.isMember (jss::method) ?
-        paramsObj[jss::method].asString() : args[0];
-
-    // If paramsObj is not empty, put it in a [params] array.
-    if (paramsObj.begin() != paramsObj.end())
+    if (paramsObj.isMember (jss::error))
     {
-        auto& paramsArray = Json::setArray (jv, jss::params);
-        paramsArray.append (paramsObj);
+        jv              = paramsObj;
+        jv["rpc"]       = jvRpc;
+        jv[jss::status] = "error";
     }
+    else {
+
+        // Allow parser to rewrite method.
+        jv[jss::method] = paramsObj.isMember (jss::method) ?
+            paramsObj[jss::method].asString() : args[0];
+
+        // If paramsObj is not empty, put it in a [params] array.
+        if (paramsObj.begin() != paramsObj.end())
+        {
+            auto& paramsArray = Json::setArray (jv, jss::params);
+            paramsArray.append (paramsObj);
+        }
+    }
+
     return jv;
 }
 
