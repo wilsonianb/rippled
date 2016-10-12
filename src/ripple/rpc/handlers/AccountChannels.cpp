@@ -44,13 +44,13 @@ void addChannel (Json::Value& jsonLines, SLE const& line)
         jMember[jss::account] = to_string (member[sfAccount]);
         jMember[jss::balance] = member[sfBalance].getText ();
         jMember[jss::amount] = member[sfAmount].getText ();
-        jMember[jss::seq] = member[sfSequence];
         PublicKey const pk (member[sfPublicKey]);
         jMember[jss::public_key] =
             toBase58 (TokenType::TOKEN_ACCOUNT_PUBLIC, pk);
         jMember[jss::public_key_hex] = strHex (pk);
         jDst[jss::members].append (std::move(jMember));
     }
+    jDst[jss::seq] = line[sfSequence];
     jDst[jss::settle_delay] = line[sfSettleDelay];
     if (auto const& v = line[~sfExpiration])
         jDst[jss::expiration] = *v;

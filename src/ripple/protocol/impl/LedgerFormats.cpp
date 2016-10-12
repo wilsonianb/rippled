@@ -133,6 +133,7 @@ LedgerFormats::LedgerFormats ()
 
     add ("PayChannel", ltPAYCHAN)
             << SOElement (sfChannelMembers,    SOE_REQUIRED)
+            << SOElement (sfSequence,          SOE_REQUIRED)
             << SOElement (sfSettleDelay,       SOE_REQUIRED)
             << SOElement (sfExpiration,        SOE_OPTIONAL)
             << SOElement (sfPreviousTxnID,     SOE_REQUIRED)

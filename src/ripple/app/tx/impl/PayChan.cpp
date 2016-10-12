@@ -243,7 +243,6 @@ PayChanCreate::doApply()
         m[sfAccount] = account;
         m[sfPublicKey] = pk;
         m[sfAmount] = XRPAmount{beast::zero};
-        m[sfSequence] = 0;
 
         // Add PayChan to owner directory
         uint64_t page;
@@ -266,6 +265,7 @@ PayChanCreate::doApply()
         return ret;
 
     slep->setFieldArray (sfChannelMembers, chanMembers);
+    (*slep)[sfSequence] = 0;
     (*slep)[sfSettleDelay] = ctx_.tx[sfSettleDelay];
     (*slep)[~sfExpiration] = ctx_.tx[~sfCancelAfter];
 
@@ -436,13 +436,14 @@ PayChanClaim::doApply()
 
     if (! txClaims.empty ())
     {
+        // Cannot submit single claim with higher sequence
+        if (txClaims.size() == 1 &&
+                 (*slep)[sfSequence] < txClaims[0][sfSequence])
+            return terPRE_SEQ;
+
         std::array<STAmount, 2> amounts {
             chanMembers[0][sfAmount],
             chanMembers[1][sfAmount]};
-
-        std::array<std::uint32_t, 2> sequences {
-            chanMembers[0][sfSequence],
-            chanMembers[1][sfSequence]};
 
         for (auto const& txClaim : txClaims)
         {
@@ -452,33 +453,26 @@ PayChanClaim::doApply()
             if (i == 1 && txClaim[sfPublicKey] != chanMembers[1][sfPublicKey])
                 return temBAD_SIGNER;
 
-            if (txClaim[sfSequence] < chanMembers[i][sfSequence])
+            if (txClaim[sfSequence] < (*slep)[sfSequence])
                 return tefPAST_SEQ;
 
-            if (txClaim[sfSequence] == chanMembers[i][sfSequence] &&
+            if (txClaim[sfSequence] == (*slep)[sfSequence] &&
                     txClaim[sfAmount] <= chanMembers[i][sfAmount])
                 return tefPAST_SEQ;
 
             amounts[i] = txClaim[sfAmount];
-            sequences[i] = txClaim[sfSequence];
 
             if (ctx_.tx[sfAccount] == chanMembers[i].getAccountID (sfAccount))
                 submittedOwnClaim = true;
         }
 
-        // Cannot submit single claim with higher sequence
-        if (sequences[0] != sequences[1])
-            return terPRE_SEQ;
-
         if (chanMembers[0][sfBalance] < (amounts[0] - amounts[1]) ||
             chanMembers[1][sfBalance] < (amounts[1] - amounts[0]))
             return tecUNFUNDED_PAYMENT;
 
+        (*slep)[sfSequence] = txClaims[0][sfSequence];
         for (auto const& i : {0, 1})
-        {
             chanMembers[i][sfAmount] = amounts[i];
-            chanMembers[i][sfSequence] = sequences[i];
-        }
 
         slep->setFieldArray (sfChannelMembers, chanMembers);
     }

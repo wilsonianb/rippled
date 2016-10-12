@@ -54,7 +54,6 @@ InnerObjectFormats::InnerObjectFormats ()
         << SOElement (sfBalance,              SOE_REQUIRED)
         << SOElement (sfPublicKey,            SOE_REQUIRED)
         << SOElement (sfAmount,               SOE_REQUIRED)
-        << SOElement (sfSequence,             SOE_REQUIRED)
         << SOElement (sfOwnerNode,            SOE_REQUIRED)
         ;
 }
