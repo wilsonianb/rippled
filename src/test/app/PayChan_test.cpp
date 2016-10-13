@@ -520,23 +520,35 @@ struct PayChan_test : public beast::unit_test::suite
         NetClock::time_point settleTimepoint =
             env.current ()->info ().parentCloseTime + settleDelay;
         auto const channelFunds = XRP (1000);
+
+        {
+            env (create (
+                alice, bob, channelFunds, settleDelay, alice.pk (), bob.pk ()));
+            auto const chan = channel (*env.current (), alice, bob);
+            BEAST_EXPECT (channelExists (*env.current (), chan));
+            BEAST_EXPECT (!channelExpiration (*env.current (), chan));
+
+            // Third party cannot trigger settle delay without any claims
+            env (claim (carol, chan), ter (tecNO_PERMISSION));
+            BEAST_EXPECT (!channelExpiration (*env.current (), chan));
+
+            // Third party can trigger settle delay with claims
+            auto const authAmt = XRP (100);
+            auto const aliceClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, authAmt, 0));
+            env (claim (carol, chan, aliceClaim));
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, alice) == authAmt);
+            BEAST_EXPECT (*channelExpiration (*env.current (), chan) ==
+                settleTimepoint.time_since_epoch ().count ());
+        }
+
         env (create (
             alice, bob, channelFunds, settleDelay, alice.pk (), bob.pk ()));
         auto const chan = channel (*env.current (), alice, bob);
         BEAST_EXPECT (channelExists (*env.current (), chan));
         BEAST_EXPECT (!channelExpiration (*env.current (), chan));
         env (fund (bob, chan, channelFunds));
-
-        {
-            // Third party does not start settle delay when submitting claim
-            auto const authAmt =
-                channelAmount (*env.current (), chan, alice) + XRP (100);
-            auto const aliceClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt, 0));
-            env (claim (carol, chan, aliceClaim));
-            BEAST_EXPECT (channelAmount (*env.current (), chan, alice) == authAmt);
-            BEAST_EXPECT (! channelExpiration (*env.current (), chan));
-        }
 
         // Channel member can trigger settle delay without any claims
         env (claim (alice, chan));

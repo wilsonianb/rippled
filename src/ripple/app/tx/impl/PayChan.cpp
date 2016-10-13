@@ -473,12 +473,10 @@ PayChanClaim::doApply()
         slep->setFieldArray (sfChannelMembers, chanMembers);
     }
 
-    // Do not start the settle delay if third party submits claim.
     // Do not reset settle delay if there is already an expiration,
     // and a channel member submits only their own claim.
     // This prevents a participant from perpetually keeping the channel open.
-    if ((! thirdPartySubmission || curExpiration) &&
-        (! curExpiration || ! submittedOwnClaim || txClaims.size() == 2))
+    if (! curExpiration || ! submittedOwnClaim || txClaims.size() == 2)
     {
         (*slep)[~sfExpiration] =
             ctx_.view ().info ().parentCloseTime.time_since_epoch ().count () +
