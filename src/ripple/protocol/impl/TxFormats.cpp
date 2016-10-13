@@ -119,8 +119,7 @@ TxFormats::TxFormats ()
             SOElement (sfAmount,            SOE_REQUIRED) <<
             SOElement (sfSettleDelay,       SOE_REQUIRED) <<
             SOElement (sfPublicKey,         SOE_REQUIRED) <<
-            SOElement (sfDstPublicKey,      SOE_REQUIRED) <<
-            SOElement (sfCancelAfter,       SOE_OPTIONAL);
+            SOElement (sfDstPublicKey,      SOE_REQUIRED);
 
     add ("PaymentChannelFund", ttPAYCHAN_FUND) <<
             SOElement (sfPayChannel,        SOE_REQUIRED) <<

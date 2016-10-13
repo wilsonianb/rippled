@@ -109,8 +109,7 @@ struct PayChan_test : public beast::unit_test::suite
         STAmount const& amount,
         NetClock::duration const& settleDelay,
         PublicKey const& pk,
-        PublicKey const& dpk,
-        boost::optional<NetClock::time_point> const& cancelAfter = boost::none)
+        PublicKey const& dpk)
     {
         using namespace jtx;
         Json::Value jv;
@@ -122,8 +121,6 @@ struct PayChan_test : public beast::unit_test::suite
         jv["SettleDelay"] = settleDelay.count ();
         jv["PublicKey"] = strHex (pk.slice ());
         jv["DstPublicKey"] = strHex (dpk.slice ());
-        if (cancelAfter)
-            jv["CancelAfter"] = cancelAfter->time_since_epoch ().count ();
         return jv;
     }
 
@@ -509,69 +506,6 @@ struct PayChan_test : public beast::unit_test::suite
     }
 
     void
-    testCancelAfter ()
-    {
-        testcase ("cancel after");
-        using namespace jtx;
-        using namespace std::literals::chrono_literals;
-        Env env (*this, features (featurePayChan));
-        auto const alice = Account ("alice");
-        auto const bob = Account ("bob");
-        auto const carol = Account ("carol");
-        env.fund (XRP (10000), alice, bob, carol);
-        auto const pk = alice.pk ();
-        auto const dpk = bob.pk ();
-        auto const settleDelay = 100s;
-        auto const channelFunds = XRP (1000);
-
-        {
-            // Close channel after cancelAfter
-            NetClock::time_point const cancelAfter =
-                env.current ()->info ().parentCloseTime + 3600s;
-            env (create (
-                alice, bob, channelFunds, settleDelay, pk, dpk, cancelAfter));
-            auto const chan = channel (*env.current (), alice, bob);
-            BEAST_EXPECT (channelExists (*env.current (), chan));
-            BEAST_EXPECT (*channelExpiration (*env.current (), chan) ==
-                cancelAfter.time_since_epoch ().count ());
-            env.close (cancelAfter);
-            {
-                // No one can claim after cancelAfter
-                auto preAlice = env.balance (alice);
-                auto preBob = env.balance (bob);
-                auto const authAmt = XRP (500);
-                auto const lateClaim = signClaim (alice.sk (), makeClaim (
-                    alice.pk (), chan, authAmt, 0));
-                env (claim (bob, chan, lateClaim));
-                auto const feeDrops = env.current ()->fees ().base;
-                BEAST_EXPECT (!channelExists (*env.current (), chan));
-                BEAST_EXPECT (env.balance (bob) == preBob - feeDrops);
-                BEAST_EXPECT (env.balance (alice) == preAlice + channelFunds);
-            }
-        }
-        {
-            // Third party can close after cancelAfter
-            NetClock::time_point const cancelAfter =
-                env.current ()->info ().parentCloseTime + 3600s;
-            env (create (
-                alice, bob, channelFunds, settleDelay, pk, dpk, cancelAfter));
-            auto const chan = channel (*env.current (), alice, bob);
-            BEAST_EXPECT (channelExists (*env.current (), chan));
-            BEAST_EXPECT (*channelExpiration (*env.current (), chan) ==
-                cancelAfter.time_since_epoch ().count ());
-            // third party cannot close before cancelAfter
-            env (claim (carol, chan), ter (tecNO_PERMISSION));
-            BEAST_EXPECT (channelExists (*env.current (), chan));
-            // third party close after cancelAfter
-            env.close (cancelAfter);
-            auto const preAlice = env.balance (alice);
-            env (claim (carol, chan));
-            BEAST_EXPECT (!channelExists (*env.current (), chan));
-            BEAST_EXPECT (env.balance (alice) == preAlice + channelFunds);
-        }
-    }
-
-    void
     testSettleDelay ()
     {
         testcase ("settle delay");
@@ -813,7 +747,6 @@ struct PayChan_test : public beast::unit_test::suite
         testCreate ();
         testFund ();
         testClaim ();
-        testCancelAfter ();
         testSettleDelay ();
         testRPC ();
     }

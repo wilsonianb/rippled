@@ -71,9 +71,6 @@ namespace ripple {
         SettleDelay
             The amount of time everyone must wait after a claim for a superior
             claim.
-        CancelAfter (optional)
-            Do not honor any claims after the `CancelAfter` time if no claims
-            were submitted beforehand.
 
     PaymentChannelFund
 
@@ -267,7 +264,6 @@ PayChanCreate::doApply()
     slep->setFieldArray (sfChannelMembers, chanMembers);
     (*slep)[sfSequence] = 0;
     (*slep)[sfSettleDelay] = ctx_.tx[sfSettleDelay];
-    (*slep)[~sfExpiration] = ctx_.tx[~sfCancelAfter];
 
     ctx_.view ().insert (slep);
 
