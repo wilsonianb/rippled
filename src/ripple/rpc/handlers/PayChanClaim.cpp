@@ -100,7 +100,7 @@ Json::Value doChannelVerify (RPC::Context& context)
 
     Json::Value result;
     result[jss::signature_verified] = verify (
-        *claim.object, HashPrefix::paymentChannelClaim, *pk, /*canonical*/ true);
+        *claim.object, HashPrefix::paymentChannelClaim, *pk);
 
     return result;
 }

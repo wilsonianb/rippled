@@ -52,8 +52,8 @@ namespace ripple {
         submitting a channel claim, the participant must wait out a delay to
         close the channel to give the counterparty a chance to supply any
         additional claims. Any transaction that touches the channel after the
-        expiration time will close the channel. When the channel is closed any
-        remaining balance is returned to the owners.
+        expiration time will close the channel. When the channel is closed,
+        claims are settled and any remaining balance is returned to the owners.s
 
     PaymentChannelCreate
 
@@ -219,13 +219,12 @@ PayChanCreate::preclaim(PreclaimContext const &ctx)
 TER
 PayChanCreate::doApply()
 {
-    auto const account = ctx_.tx[sfAccount];
-    auto const sle = ctx_.view ().peek (keylet::account (account));
+    auto const sle = ctx_.view ().peek (keylet::account (account_));
     auto const dst = ctx_.tx[sfDestination];
 
     // Create PayChan in ledger
     auto const slep = std::make_shared<SLE> (
-        keylet::payChan (account, dst, (*sle)[sfSequence] - 1));
+        keylet::payChan (account_, dst, (*sle)[sfSequence] - 1));
 
     STArray chanMembers {sfChannelMembers, 2};
 
@@ -243,17 +242,18 @@ PayChanCreate::doApply()
 
         // Add PayChan to owner directory
         uint64_t page;
-        auto result = dirAdd (ctx_.view (), page, keylet::ownerDir (account),
-            slep->key (), describeOwnerDir (account),
-            ctx_.app.journal ("View"));
-        if (isTesSuccess (result.first))
+        TER terResult;
+        std::tie (terResult, std::ignore) = dirAdd (
+            ctx_.view (), page, keylet::ownerDir (account), slep->key (),
+            describeOwnerDir (account), ctx_.app.journal ("View"));
+        if (isTesSuccess (terResult))
             m[sfOwnerNode] = page;
 
-        return result.first;
+        return terResult;
     };
 
     auto ret =
-        makeChanMember (account, ctx_.tx[sfAmount], ctx_.tx[sfPublicKey]);
+        makeChanMember (account_, ctx_.tx[sfAmount], ctx_.tx[sfPublicKey]);
     if (!isTesSuccess (ret))
         return ret;
 
@@ -301,7 +301,6 @@ PayChanFund::doApply()
     if (!slep)
         return tecNO_ENTRY;
 
-    auto const txAccount = ctx_.tx[sfAccount];
     auto const expiration = (*slep)[~sfExpiration];
 
     if (expiration)
@@ -315,14 +314,16 @@ PayChanFund::doApply()
 
     auto chanMembers = slep->getFieldArray (sfChannelMembers);
 
-    auto const i = (chanMembers[0].getAccountID (sfAccount) == txAccount)
-        ? 0 : 1;
-
-    // only channel members can add funds
-    if (i == 1 && chanMembers[1].getAccountID (sfAccount) != txAccount)
+    bool i;
+    if (chanMembers[0].getAccountID (sfAccount) == account_)
+        i = 0;
+    else if (chanMembers[1].getAccountID (sfAccount) == account_)
+        i = 1;
+    else
+        // only channel members can add funds
         return tecNO_PERMISSION;
 
-    auto const sle = ctx_.view ().peek (keylet::account (txAccount));
+    auto const sle = ctx_.view ().peek (keylet::account (account_));
 
     {
         // Check reserve and funds availability
@@ -388,8 +389,7 @@ PayChanClaim::preflight (PreflightContext const& ctx)
 
         // Check the signature
         PublicKey const pk (claim[sfPublicKey]);
-        if (!verify (
-                claim, HashPrefix::paymentChannelClaim, pk, /*canonical*/ true))
+        if (!verify (claim, HashPrefix::paymentChannelClaim, pk))
             return temBAD_SIGNATURE;
     }
 
@@ -407,8 +407,8 @@ PayChanClaim::doApply()
     auto chanMembers = slep->getFieldArray (sfChannelMembers);
     auto const& txClaims = ctx_.tx.getFieldArray (sfChannelClaims);
     bool const thirdPartySubmission =
-        chanMembers[0].getAccountID (sfAccount) != ctx_.tx[sfAccount] &&
-        chanMembers[1].getAccountID (sfAccount) != ctx_.tx[sfAccount];
+        chanMembers[0].getAccountID (sfAccount) != account_ &&
+        chanMembers[1].getAccountID (sfAccount) != account_;
 
     auto const curExpiration = (*slep)[~sfExpiration];
     if (curExpiration)
@@ -424,7 +424,7 @@ PayChanClaim::doApply()
         if (txClaims.empty ())
             return tecNO_PERMISSION;
     }
-    // third party must have claim if the channel has not expired
+    // third party must include claim(s) if the channel isn't expiring
     else if (thirdPartySubmission && txClaims.empty ())
         return tecNO_PERMISSION;
 
@@ -441,12 +441,15 @@ PayChanClaim::doApply()
             chanMembers[0][sfAmount],
             chanMembers[1][sfAmount]};
 
+        // Determine which claim is from which channel member
         for (auto const& txClaim : txClaims)
         {
-            auto const i =
-                txClaim[sfPublicKey] == chanMembers[0][sfPublicKey] ? 0 : 1;
-
-            if (i == 1 && txClaim[sfPublicKey] != chanMembers[1][sfPublicKey])
+            bool i;
+            if (chanMembers[0][sfPublicKey] == txClaim[sfPublicKey])
+                i = 0;
+            else if (chanMembers[1][sfPublicKey] == txClaim[sfPublicKey])
+                i = 1;
+            else
                 return temBAD_SIGNER;
 
             if (txClaim[sfSequence] < (*slep)[sfSequence])
@@ -458,7 +461,7 @@ PayChanClaim::doApply()
 
             amounts[i] = txClaim[sfAmount];
 
-            if (ctx_.tx[sfAccount] == chanMembers[i].getAccountID (sfAccount))
+            if (account_ == chanMembers[i].getAccountID (sfAccount))
                 submittedOwnClaim = true;
         }
 

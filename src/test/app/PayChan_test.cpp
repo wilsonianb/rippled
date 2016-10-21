@@ -103,6 +103,14 @@ struct PayChan_test : public beast::unit_test::suite
         return boost::none;
     }
 
+    static
+    std::uint32_t
+    channelSequence (ReadView const& view, uint256 const& chan)
+    {
+        auto const slep = view.read ({ltPAYCHAN, chan});
+        return (*slep)[sfSequence];
+    }
+
     static Json::Value
     create (jtx::Account const& account,
         jtx::Account const& to,
@@ -375,28 +383,29 @@ struct PayChan_test : public beast::unit_test::suite
         env (create (
             alice, bob, XRP (1000), settleDelay, alice.pk (), bob.pk ()));
         auto const chan = channel (*env.current (), alice, bob);
+        auto seq = channelSequence (*env.current (), chan);
 
         {
             // Claim to non-existent channel
             auto const chan = channel (*env.current (), alice, carol);
             auto const newClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, XRP (500), 0));
+                alice.pk (), chan, XRP (500), seq));
             env (claim (alice, chan, newClaim), ter (tecNO_ENTRY));
         }
         {
             // Claim with bad amounts (negative and non-xrp)
             auto iouClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, alice["USD"] (100), 0));
+                alice.pk (), chan, alice["USD"] (100), seq));
             env (claim (alice, chan, iouClaim), ter (temBAD_AMOUNT));
 
             auto const negClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, XRP (-100), 0));
+                alice.pk (), chan, XRP (-100), seq));
             env (claim (alice, chan, negClaim), ter (temBAD_AMOUNT));
         }
         {
             // Claim with wrong signing key
             auto const badClaim = signClaim (carol.sk (), makeClaim (
-                carol.pk (), chan, XRP (500), 0));
+                carol.pk (), chan, XRP (500), seq));
             env (claim (bob, chan, badClaim), ter (temBAD_SIGNER));
         }
         {
@@ -409,11 +418,30 @@ struct PayChan_test : public beast::unit_test::suite
             env (claim (bob, chan, claim1), ter (temBAD_SIGNATURE));
         }
         {
-            // Claim
+            // Cannot submit two claims from single signer
+            auto const newClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, XRP (500), seq));
+            env (claim (bob, chan, newClaim, newClaim), ter (temMALFORMED));
+        }
+        {
+            // Cannot submit more than two claims
+            auto const aliceClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, XRP (500), seq));
+            auto const bobClaim = signClaim (bob.sk (), makeClaim (
+                bob.pk (), chan, XRP (500), seq));
+
+            auto tripleClaim = claim (bob, chan, aliceClaim, bobClaim);
+            Json::Value jvClaim3;
+            jvClaim3["ChannelClaim"] = bobClaim;
+            tripleClaim["ChannelClaims"].append (jvClaim3);
+            env (tripleClaim, ter (temMALFORMED));
+        }
+        {
+            // Single claim
             auto preBob = env.balance (bob);
             auto const authAmt = XRP (500);
             auto const newClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt, 0));
+                alice.pk (), chan, authAmt, seq));
             env (claim (bob, chan, newClaim));
             BEAST_EXPECT (
                 channelAmount (*env.current (), chan, alice) == authAmt);
@@ -428,42 +456,70 @@ struct PayChan_test : public beast::unit_test::suite
             BEAST_EXPECT (env.balance (bob) == preBob);
         }
         {
-            // Missing claims after settle delay is triggered
-            env (claim (bob, chan), ter (tecNO_PERMISSION));
-        }
-        {
-            // Cannot submit two claims from single signer
-            auto const newClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, XRP (500), 0));
-            env (claim (bob, chan, newClaim, newClaim), ter (temMALFORMED));
-        }
-        {
-            // Cannot submit more than two claims
-            auto const aliceClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, XRP (500), 0));
-            auto const bobClaim = signClaim (bob.sk (), makeClaim (
-                bob.pk (), chan, XRP (500), 0));
-
-            auto tripleClaim = claim (bob, chan, aliceClaim, bobClaim);
-            Json::Value jvClaim3;
-            jvClaim3["ChannelClaim"] = bobClaim;
-            tripleClaim["ChannelClaims"].append (jvClaim3);
-            env (tripleClaim, ter (temMALFORMED));
-        }
-        {
             // Try to claim more than available
             auto const preAmount =
                 channelAmount (*env.current (), chan, alice);
-            auto const preBob = env.balance (bob);
             auto const authAmt =
                 channelBalance (*env.current (), chan, alice) + XRP (500);
             auto const badClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt, 0));
+                alice.pk (), chan, authAmt, seq));
             env (claim (bob, chan, badClaim), ter (tecUNFUNDED_PAYMENT));
             BEAST_EXPECT (
                 channelAmount (*env.current (), chan, alice) == preAmount);
-            auto const feeDrops = env.current ()->fees ().base;
-            BEAST_EXPECT (env.balance (bob) == preBob - feeDrops);
+        }
+        {
+            // Cannot raise sequence with single claim
+            auto const preAmount =
+                channelAmount (*env.current (), chan, alice);
+            auto const preAlice = env.balance (alice);
+            auto const badClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, XRPAmount{beast::zero}, seq + 1));
+            env (claim (alice, chan, badClaim), ter (terPRE_SEQ));
+            BEAST_EXPECT (
+                channelSequence(*env.current (), chan) == seq);
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, alice) == preAmount);
+        }
+        {
+            // Raise sequence with two claims
+            ++seq;
+            auto const aliceAuthAmt = XRP (100);
+            auto const bobAuthAmt = XRPAmount{beast::zero};
+            auto const aliceClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, aliceAuthAmt, seq));
+            auto const bobClaim = signClaim (bob.sk (), makeClaim (
+                bob.pk (), chan, bobAuthAmt, seq));
+            env (claim (alice, chan, bobClaim, aliceClaim));
+            BEAST_EXPECT (
+                channelSequence(*env.current (), chan) == seq);
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, alice) == aliceAuthAmt);
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, bob) == bobAuthAmt);
+        }
+        {
+            // Cannot submit claim with old sequence
+            auto const preAmount =
+                channelAmount (*env.current (), chan, alice);
+            auto const preAlice = env.balance (alice);
+            auto const badClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, preAmount + XRP(100), seq - 1));
+            env (claim (alice, chan, badClaim), ter (tefPAST_SEQ));
+            BEAST_EXPECT (
+                channelSequence(*env.current (), chan) == seq);
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, alice) == preAmount);
+        }
+        {
+            // Cannot submit claim with lower amount
+            auto const preAmount =
+                channelAmount (*env.current (), chan, alice);
+            auto const preAlice = env.balance (alice);
+            auto const badClaim = signClaim (alice.sk (), makeClaim (
+                alice.pk (), chan, preAmount - XRP(100), seq));
+            env (claim (alice, chan, badClaim), ter (tefPAST_SEQ));
+            BEAST_EXPECT (
+                channelAmount (*env.current (), chan, alice) == preAmount);
         }
         {
             // Honor claim to a channel where member disallows XRP
@@ -472,7 +528,7 @@ struct PayChan_test : public beast::unit_test::suite
             auto const authAmt =
                 channelAmount (*env.current (), chan, alice) + XRP (100);
             auto const newClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt, 0));
+                alice.pk (), chan, authAmt, seq));
             env (claim (alice, chan, newClaim));
             BEAST_EXPECT (channelAmount (*env.current (), chan, alice) == authAmt);
         }
@@ -482,14 +538,14 @@ struct PayChan_test : public beast::unit_test::suite
             auto const authAmt1 =
                 channelAmount (*env.current (), chan, alice) + XRP (100);
             auto const tagClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt1, 0, 1));
+                alice.pk (), chan, authAmt1, seq, 1));
             env (claim (alice, chan, tagClaim));
             BEAST_EXPECT (
                 channelAmount (*env.current (), chan, alice) == authAmt1);
             auto const authAmt2 =
                 channelAmount (*env.current (), chan, alice) + XRP (100);
             auto const taglessClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt2, 0));
+                alice.pk (), chan, authAmt2, seq));
             env (claim (alice, chan, taglessClaim));
             BEAST_EXPECT (
                 channelAmount (*env.current (), chan, alice) == authAmt2);
@@ -500,7 +556,7 @@ struct PayChan_test : public beast::unit_test::suite
                 channelAmount (*env.current (), chan, alice) + XRP (100);
             std::string invoiceId = "claim invoice";
             auto const loadedClaim = signClaim (alice.sk (), makeClaim (
-                alice.pk (), chan, authAmt1, 0, 1, 2, invoiceId));
+                alice.pk (), chan, authAmt1, seq, 1, 2, invoiceId));
             env (claim (alice, chan, loadedClaim));
         }
     }
@@ -556,6 +612,9 @@ struct PayChan_test : public beast::unit_test::suite
         BEAST_EXPECT (*channelExpiration (*env.current (), chan) ==
             settleTimepoint.time_since_epoch ().count ());
         env.close (settleTimepoint-settleDelay/2);
+
+        // Missing claims after settle delay is triggered
+        env (claim (bob, chan), ter (tecNO_PERMISSION));
 
         {
             // Bob extends settle delay with Alice's claim
