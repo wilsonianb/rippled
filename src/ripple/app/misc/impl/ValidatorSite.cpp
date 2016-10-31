@@ -269,13 +269,27 @@ ValidatorSite::onSiteFetch(
                     manifest->masterKey,
                     body["blob"].asString (),
                     body["signature"].asString(),
-                    body["version"].asUInt()))
+                    body["version"].asUInt(),
+                    manifest->serialized))
                 {
                     JLOG (j_.debug()) <<
                         "Applied new validator list for " <<
                         toBase58(
                             TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
                         " from " << sites_[siteIdx].uri;
+
+                    // Send updated published list to
+                    // all directly connected peers
+                    protocol::TMValidatorLists tvl;
+                    auto& vl = *tvl.add_list();
+                    vl.set_publickey (toBase58 (
+                        TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey));
+                    vl.set_blob (body["blob"].asString ());
+                    vl.set_signature (body["signature"].asString());
+                    vl.set_version (body["version"].asUInt());
+                    auto const& s = manifest->serialized;
+                    vl.set_manifest(s.data(), s.size());
+                    app_.overlay().send(tvl);
                 }
             }
 

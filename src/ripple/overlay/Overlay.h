@@ -154,6 +154,11 @@ public:
     void
     send (protocol::TMValidation& m) = 0;
 
+    /** Broadcast validator lists. */
+    virtual
+    void
+    send (protocol::TMValidatorLists& m) = 0;
+
     /** Relay a proposal. */
     virtual
     void

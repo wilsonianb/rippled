@@ -204,7 +204,8 @@ ValidatorList::applyList (
     PublicKey const& pubKey,
     std::string const& blob,
     std::string const& signature,
-    std::uint32_t version)
+    std::uint32_t version,
+    boost::optional<std::string> const& manifest)
 {
     Json::Value list;
     std::vector<std::string> manifests;
@@ -297,6 +298,8 @@ ValidatorList::applyList (
             "No validator keys included in valid list";
     }
 
+    listCache_[pubKey] = {blob, pubKey, signature, version, manifest};
+
     read_lock.unlock();
 
     for (auto const& manifest : manifests)
@@ -304,6 +307,11 @@ ValidatorList::applyList (
         if (auto mo = Manifest::make_Manifest (
             beast::detail::base64_decode(manifest)))
         {
+            // Applied manifests here do not need to be forwarded to peers.
+            // These manifests are included in the published list that will
+            // be forwarded to peers. Peers that don't trust this publisher
+            // but do trust these validators should have already received any
+            // updated manifests.
             manifests_.applyManifest (
                 std::move (*mo),
                 *this);

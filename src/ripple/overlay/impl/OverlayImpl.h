@@ -183,6 +183,9 @@ public:
     send (protocol::TMValidation& m) override;
 
     void
+    send (protocol::TMValidatorLists& m) override;
+
+    void
     relay (protocol::TMProposeSet& m,
         uint256 const& uid) override;
 
@@ -247,6 +250,12 @@ public:
         std::shared_ptr<protocol::TMManifests> const& m,
             std::shared_ptr<PeerImp> const& from);
 
+    // Called when TMValidatorLists is received from a peer
+    void
+    onValidatorLists (
+        std::shared_ptr<protocol::TMValidatorLists> const& lists,
+            std::shared_ptr<PeerImp> const& from);
+
     static
     bool
     isPeerUpgrade (http_request_type const& request);
@@ -281,6 +290,11 @@ private:
 
     void
     connect (beast::IP::Endpoint const& remote_endpoint) override;
+
+    void
+    onManifest (std::string const& m,
+        std::shared_ptr<PeerImp> const& from,
+        bool history=false);
 
     /*  The number of active peers on the network
         Active peers are only those peers that have completed the handshake

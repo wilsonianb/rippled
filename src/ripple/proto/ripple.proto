@@ -16,6 +16,7 @@ enum MessageType
     mtPROPOSE_LEDGER        = 33;
     mtSTATUS_CHANGE         = 34;
     mtHAVE_SET              = 35;
+    mtVALIDATOR_LISTS       = 40;
     mtVALIDATION            = 41;
     mtGET_OBJECTS           = 42;
 
@@ -25,7 +26,6 @@ enum MessageType
     // <available>          = 20;
     // <available>          = 21;
     // <available>          = 22;
-    // <available>          = 40;
 }
 
 // token, iterations, target, challenge = issue demand for proof of work
@@ -47,6 +47,23 @@ message TMManifests
     // The manifests sent when a peer first connects to another peer are `history`.
     // The receiving peer does not forward them.
     optional bool history = 2 [default = false];
+}
+
+//------------------------------------------------------------------------------
+
+/* Provides the current recommended validator keys. */
+message TMValidatorList
+{
+    required string publicKey = 1;
+    required string blob      = 2;
+    required string signature = 3;
+    required uint32 version   = 4;
+    optional bytes  manifest  = 5;
+}
+
+message TMValidatorLists
+{
+    repeated TMValidatorList list = 1;
 }
 
 //------------------------------------------------------------------------------
