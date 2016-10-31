@@ -51,6 +51,23 @@ enum class ListDisposition
     invalid,
 };
 
+
+/// Published validator list
+struct PublishedList
+{
+    /// Base64-encoded JSON string with @c "sequence" and @c "validators" fields
+    std::string blob;
+
+    /// Publisher master public key
+    PublicKey publicKey;
+
+    /// Blob signature using publisher signing key
+    std::string signature;
+
+    /// List format version number
+    std::uint32_t version;
+};
+
 /**
     Trusted Validators List
     -----------------------
@@ -112,6 +129,9 @@ class ValidatorList
 
     // The current list of trusted master keys
     hash_set<PublicKey> trustedKeys_;
+
+    // Cache of raw fetched lists stored by publisher master public key
+    hash_map<PublicKey, PublishedList> listCache_;
 
     PublicKey localPubKey_;
 
@@ -303,6 +323,32 @@ public:
     void
     for_each_listed (
         std::function<void(PublicKey const&, bool)> func) const;
+
+    /** Invokes the callback once for every published list.
+
+        @note Undefined behavior results when calling ValidatorList members from
+        within the callback
+
+        @param pf Pre-function called with the maximum number of times f will be
+            called (useful for memory allocations)
+
+        @param f Function called for each list
+
+        @par Thread Safety
+
+        May be called concurrently
+    */
+    template <class PreFun, class EachFun>
+    void
+    for_each_list(PreFun&& pf, EachFun&& f) const
+    {
+        boost::shared_lock<boost::shared_mutex> read_lock{mutex_};
+        pf(listCache_.size ());
+        for (auto const& m : listCache_)
+        {
+            f(m.second);
+        }
+    }
 
 private:
     /** Check response for trusted valid published list

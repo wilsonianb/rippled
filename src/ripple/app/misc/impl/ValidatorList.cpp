@@ -297,6 +297,8 @@ ValidatorList::applyList (
             "No validator keys included in valid list";
     }
 
+    listCache_[pubKey] = {blob, pubKey, signature, version};
+
     read_lock.unlock();
 
     for (auto const& manifest : manifests)

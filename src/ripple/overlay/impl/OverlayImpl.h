@@ -183,6 +183,9 @@ public:
     send (protocol::TMValidation& m) override;
 
     void
+    send (protocol::TMValidatorLists& m) override;
+
+    void
     relay (protocol::TMProposeSet& m,
         uint256 const& uid) override;
 
@@ -236,6 +239,12 @@ public:
     void
     onManifests (
         std::shared_ptr<protocol::TMManifests> const& m,
+            std::shared_ptr<PeerImp> const& from);
+
+    // Called when TMValidatorLists is received from a peer
+    void
+    onValidatorLists (
+        std::shared_ptr<protocol::TMValidatorLists> const& lists,
             std::shared_ptr<PeerImp> const& from);
 
     static

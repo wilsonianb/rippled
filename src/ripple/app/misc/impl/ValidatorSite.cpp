@@ -258,8 +258,7 @@ ValidatorSite::onSiteFetch(
                     // Send manifest to all directly connected peers
                     protocol::TMManifests tm;
                     auto const& s = manifest->serialized;
-                    auto& tm_e = *tm.add_list();
-                    tm_e.set_stobject(s.data(), s.size());
+                    tm.add_list ()->set_stobject (s.data(), s.size());
                     overlay_.send (tm);
                 }
 
@@ -282,6 +281,17 @@ ValidatorSite::onSiteFetch(
                         toBase58(
                             TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
                         " from " << sites_[siteIdx].uri;
+
+                    // Send updated published list to
+                    // all directly connected peers
+                    protocol::TMValidatorLists tvl;
+                    auto& vl = *tvl.add_list();
+                    vl.set_publickey (toBase58 (
+                        TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey));
+                    vl.set_blob (body["blob"].asString ());
+                    vl.set_signature (body["signature"].asString());
+                    vl.set_version (body["version"].asUInt());
+                    overlay_.send(tvl);
                 }
             }
 

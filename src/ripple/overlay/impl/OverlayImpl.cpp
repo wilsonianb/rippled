@@ -20,6 +20,7 @@
 #include <BeastConfig.h>
 #include <ripple/app/misc/HashRouter.h>
 #include <ripple/app/misc/NetworkOPs.h>
+#include <ripple/app/misc/ValidatorList.h>
 #include <ripple/core/DatabaseCon.h>
 #include <ripple/basics/contract.h>
 #include <ripple/basics/Log.h>
@@ -34,6 +35,7 @@
 #include <ripple/overlay/impl/PeerImp.h>
 #include <ripple/overlay/impl/TMHello.h>
 #include <ripple/peerfinder/make_Manager.h>
+#include <ripple/protocol/digest.h>
 #include <ripple/protocol/STExchange.h>
 #include <ripple/beast/core/ByteOrder.h>
 #include <beast/core/detail/base64.hpp>
@@ -726,6 +728,58 @@ OverlayImpl::onManifests (
 }
 
 void
+OverlayImpl::onValidatorLists (
+    std::shared_ptr<protocol::TMValidatorLists> const& m,
+        std::shared_ptr<PeerImp> const& from)
+{
+    auto& hashRouter = app_.getHashRouter();
+    auto const n = m->list_size();
+    auto const& journal = from->pjournal();
+
+    JLOG(journal.debug()) << "TMValidatorLists, " << n
+        << (n == 1 ? " item" : " items");
+
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        auto& s = m->list ().Get (i);
+
+        std::string data;
+        s.SerializeToString (&data);
+        uint256 const hash = sha512Half(data);
+        if (! app_.getHashRouter ().addSuppressionPeer(
+                hash, from->id ()))
+            continue;
+
+        auto const pubKey = parseBase58<PublicKey>(
+            TokenType::TOKEN_NODE_PUBLIC, s.publickey());
+
+        if (! pubKey)
+            continue;
+
+        auto const result = app_.validators ().applyList(
+            *pubKey,
+            s.blob(),
+            s.signature(),
+            s.version());
+
+        if (result != ListDisposition::accepted)
+        {
+            JLOG(journal.warn()) << "Unable to apply list #" << i + 1;
+            continue;
+        }
+
+        protocol::TMValidatorLists o;
+        *o.add_list() = s;
+
+        auto const toSkip = hashRouter.shouldRelay (hash);
+        if (toSkip)
+            foreach (send_if_not (
+                std::make_shared<Message>(o, protocol::mtVALIDATOR_LISTS),
+                    peer_in_set (*toSkip)));
+    }
+}
+
+void
 OverlayImpl::reportTraffic (
     TrafficCount::category cat,
     bool isInbound,
@@ -969,6 +1023,17 @@ OverlayImpl::relay (protocol::TMValidation& m,
             return;
         if (! m.has_hops() || p->hopsAware())
             p->send(sm);
+    });
+}
+
+void
+OverlayImpl::send (protocol::TMValidatorLists& m)
+{
+    auto const sm = std::make_shared<Message>(
+        m, protocol::mtVALIDATOR_LISTS);
+    for_each([&](std::shared_ptr<PeerImp>&& p)
+    {
+        p->send(sm);
     });
 }
 

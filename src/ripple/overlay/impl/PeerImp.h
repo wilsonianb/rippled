@@ -425,6 +425,7 @@ public:
     void onMessage (std::shared_ptr <protocol::TMHaveTransactionSet> const& m);
     void onMessage (std::shared_ptr <protocol::TMValidation> const& m);
     void onMessage (std::shared_ptr <protocol::TMGetObjectByHash> const& m);
+    void onMessage (std::shared_ptr <protocol::TMValidatorLists> const& m);
 
 private:
     State state() const

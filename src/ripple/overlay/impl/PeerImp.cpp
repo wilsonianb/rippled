@@ -718,6 +718,27 @@ PeerImp::doProtocolStart()
         auto m = std::make_shared<Message>(tm, protocol::mtMANIFESTS);
         send (m);
     }
+
+    protocol::TMValidatorLists tvl;
+
+    app_.validators ().for_each_list (
+        [&tvl](size_t s){tvl.mutable_list()->Reserve(s);},
+        [&tvl](PublishedList const& valList)
+        {
+            auto& vl = *tvl.add_list();
+            vl.set_publickey (toBase58 (
+                TokenType::TOKEN_NODE_PUBLIC, valList.publicKey));
+            vl.set_blob (valList.blob);
+            vl.set_signature (valList.signature);
+            vl.set_version (valList.version);
+        });
+
+    if (tvl.list_size() > 0)
+    {
+        auto m = std::make_shared<Message>(tvl, protocol::mtVALIDATOR_LISTS);
+        send (m);
+    }
+
 }
 
 // Called repeatedly with protocol message data
@@ -1746,6 +1767,16 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMGetObjectByHash> const& m)
         if (packet.type () == protocol::TMGetObjectByHash::otFETCH_PACK)
             app_.getLedgerMaster ().gotFetchPack (progress, pLSeq);
     }
+}
+
+void
+PeerImp::onMessage (std::shared_ptr <protocol::TMValidatorLists> const& m)
+{
+    // VFALCO What's the right job type?
+    auto that = shared_from_this();
+    app_.getJobQueue().addJob (
+        jtVALIDATION_ut, "receiveValidatorLists",
+        [this, that, m] (Job&) { overlay_.onValidatorLists(m, that); });
 }
 
 //--------------------------------------------------------------------------
