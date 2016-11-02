@@ -139,6 +139,11 @@ public:
     std::shared_ptr<Peer>
     findPeerByShortID (Peer::id_t const& id) = 0;
 
+    /** Broadcast manifests. */
+    virtual
+    void
+    send (protocol::TMManifests& m) = 0;
+
     /** Broadcast a proposal. */
     virtual
     void

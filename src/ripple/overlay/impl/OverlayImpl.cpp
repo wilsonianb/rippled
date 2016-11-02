@@ -890,6 +890,17 @@ OverlayImpl::findPeerByShortID (Peer::id_t const& id)
 }
 
 void
+OverlayImpl::send (protocol::TMManifests& m)
+{
+    auto const sm = std::make_shared<Message>(
+        m, protocol::mtMANIFESTS);
+    for_each([&](std::shared_ptr<PeerImp>&& p)
+    {
+        p->send(sm);
+    });
+}
+
+void
 OverlayImpl::send (protocol::TMProposeSet& m)
 {
     if (setup_.expire)
