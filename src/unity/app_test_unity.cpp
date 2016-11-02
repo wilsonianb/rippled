@@ -41,4 +41,5 @@
 #include <test/app/Transaction_ordering_test.cpp>
 #include <test/app/TxQ_test.cpp>
 #include <test/app/ValidatorList_test.cpp>
+#include <test/app/ValidatorSite_test.cpp>
 #include <test/app/SetTrust_test.cpp>

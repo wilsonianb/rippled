@@ -283,6 +283,10 @@ nHUhG1PgAG8H8myUENypM35JgfqXAKNQvRVVAFDRzJrny5eZN8d5
 nHBu9PTL9dn2GuZtdW4U2WzBwffyX9qsQCd9CNU4Z5YG3PQfViM8
 nHUPDdcdb2Y5DZAJne4c2iabFuAP3F34xZUgYQT2NH7qfkdapgnz
 
+[validator_list_sites]
+recommendedripplevalidators.com
+moreripplevalidators.net
+
 [validator_list_keys]
 n94EfWDDTNYhdvGrGXLCbzFgnKK2osD2cTrL7gZWwhqvjUBcFAWd
 n9LYXb4x6A3EwtxKfR95VEiWnGKRdCg5swNrY4mE8vrDEnxCarW1
@@ -504,18 +508,49 @@ nHBu9PTL9dn2GuZtdW4U2WzBwffyX9qsQCd9CNU4Z5YG3PQfViM8
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 5);
         }
         {
-            // load validator list keys from config
+            // load validator list sites and keys from config
             Config c;
             std::string toLoad(R"rippleConfig(
+[validator_list_sites]
+ripplevalidators.com
+trustthesevalidators.gov
+
 [validator_list_keys]
 n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
 )rippleConfig");
             c.loadFromString (toLoad);
             BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ()[0] ==
+                    "ripplevalidators.com");
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ()[1] ==
+                    "trustthesevalidators.gov");
+            BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 1);
             BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ()[0] ==
                     "n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY");
+        }
+        {
+            // load should throw if [validator_list_sites] is configured but
+            // [validator_list_keys] is not
+            Config c;
+            std::string toLoad(R"rippleConfig(
+[validator_list_sites]
+ripplevalidators.com
+trustthesevalidators.gov
+)rippleConfig");
+            std::string error;
+            auto const expectedError =
+                "[validator_list_keys] config section is missing";
+            try {
+                c.loadFromString (toLoad);
+            } catch (std::runtime_error& e) {
+                error = e.what();
+            }
+            BEAST_EXPECT(error == expectedError);
         }
         {
             // load from specified [validators_file] absolute path
@@ -527,6 +562,8 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             c.loadFromString (boost::str (cc % vtg.validatorsFile ()));
             BEAST_EXPECT(c.legacy ("validators_file") == vtg.validatorsFile ());
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 8);
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
             BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 2);
         }
@@ -542,6 +579,8 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             auto& c (rcg.config ());
             BEAST_EXPECT(c.legacy ("validators_file") == valFileName);
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 8);
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
             BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 2);
         }
@@ -559,6 +598,8 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             BEAST_EXPECT(c.legacy ("validators_file") == valFilePath);
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 8);
             BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
+            BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 2);
         }
         {
@@ -571,6 +612,8 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             auto& c (rcg.config ());
             BEAST_EXPECT(c.legacy ("validators_file").empty ());
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 8);
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
             BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 2);
         }
@@ -589,6 +632,8 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             auto& c (rcg.config ());
             BEAST_EXPECT(c.legacy ("validators_file") == vtg.validatorsFile ());
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 8);
+            BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 2);
             BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 2);
         }
@@ -609,6 +654,10 @@ n9LdgEtkmGB9E2h3K4Vp7iGUaKuq23Zr32ehxiU8FWY7xoxbWTSA
 nHB1X37qrniVugfQcuBTAjswphC1drx7QjFFojJPZwKHHnt8kU7v
 nHUkAWDR4cB8AgPg7VXMX6et8xRTQb2KJfgv1aBEXozwrawRKgMB
 
+[validator_list_sites]
+ripplevalidators.com
+trustthesevalidators.gov
+
 [validator_list_keys]
 n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
 )rippleConfig");
@@ -620,11 +669,14 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             BEAST_EXPECT(c.legacy ("validators_file") == vtg.validatorsFile ());
             BEAST_EXPECT(c.section (SECTION_VALIDATORS).values ().size () == 15);
             BEAST_EXPECT(
+                c.section (SECTION_VALIDATOR_LIST_SITES).values ().size () == 4);
+            BEAST_EXPECT(
                 c.section (SECTION_VALIDATOR_LIST_KEYS).values ().size () == 3);
         }
         {
-            // load should throw if [validators], [validator_keys] are missing
-            // from rippled cfg and validators file
+            // load should throw if [validators], [validator_keys] and
+            // [validator_list_keys] are missing from rippled cfg and
+            // validators file
             Config c;
             boost::format cc ("[validators_file]\n%1%\n");
             std::string error;
@@ -633,7 +685,7 @@ n9JkDL23X9dmE62QRYpqeR29u3rTLzBFvJqxtbAGvxLcAvAqakfY
             BEAST_EXPECT(vtg.validatorsFileExists ());
             auto const expectedError =
                 "The file specified in [validators_file] does not contain a "
-                "[validators] or [validator_keys] section: " +
+                "[validators], [validator_keys] or [validator_list_keys] section: " +
                 vtg.validatorsFile ();
             std::ofstream o (vtg.validatorsFile ());
             try {

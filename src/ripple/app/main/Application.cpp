@@ -45,6 +45,7 @@
 #include <ripple/app/misc/TxQ.h>
 #include <ripple/app/misc/Validations.h>
 #include <ripple/app/misc/ValidatorList.h>
+#include <ripple/app/misc/ValidatorSite.h>
 #include <ripple/app/paths/Pathfinder.h>
 #include <ripple/app/paths/PathRequests.h>
 #include <ripple/app/tx/apply.h>
@@ -350,6 +351,7 @@ public:
     std::unique_ptr <Cluster> cluster_;
     std::unique_ptr <ManifestCache> manifestCache_;
     std::unique_ptr <ValidatorList> validators_;
+    std::unique_ptr <ValidatorSite> validatorSites_;
     std::unique_ptr <ServerHandler> serverHandler_;
     std::unique_ptr <AmendmentTable> m_amendmentTable;
     std::unique_ptr <LoadFeeTrack> mFeeTrack;
@@ -481,6 +483,10 @@ public:
         , validators_ (std::make_unique<ValidatorList> (
             *manifestCache_, logs_->journal("ValidatorList"),
             config_->VALIDATION_QUORUM))
+
+        , validatorSites_ (std::make_unique<ValidatorSite> (
+            *validators_, *manifestCache_, *m_overlay, get_io_service(),
+            logs_->journal("ValidatorSite")))
 
         , serverHandler_ (make_ServerHandler (*this, *m_networkOPs, get_io_service (),
             *m_jobQueue, *m_networkOPs, *m_resourceManager, *m_collectorManager))
@@ -697,6 +703,11 @@ public:
         return *validators_;
     }
 
+    ValidatorSite& validatorSites () override
+    {
+        return *validatorSites_;
+    }
+
     ManifestCache& manifestCache() override
     {
         return *manifestCache_;
@@ -855,6 +866,8 @@ public:
         m_entropyTimer.cancel ();
 
         mValidations->flush ();
+
+        validatorSites_->stop ();
 
         // TODO Store manifests in manifests.sqlite instead of wallet.db
         manifestCache_->save (getWalletDB ());
@@ -1084,6 +1097,16 @@ bool ApplicationImp::setup()
     manifestCache_->load (
         getWalletDB (),
         *validators_);
+
+    if (!validatorSites_->load (
+        config().section (SECTION_VALIDATOR_LIST_SITES).values ()))
+    {
+        JLOG(m_journal.fatal()) <<
+            "Invalid entry in [" << SECTION_VALIDATOR_LIST_SITES << "]";
+        return false;
+    }
+
+    validatorSites_->start ();
 
     m_nodeStore->tune (config_->getSize (siNodeCacheSize), config_->getSize (siNodeCacheAge));
     m_ledgerMaster->tune (config_->getSize (siLedgerSize), config_->getSize (siLedgerAge));

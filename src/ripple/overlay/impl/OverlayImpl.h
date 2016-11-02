@@ -174,6 +174,9 @@ public:
     findPeerByShortID (Peer::id_t const& id) override;
 
     void
+    send (protocol::TMManifests& m) override;
+
+    void
     send (protocol::TMProposeSet& m) override;
 
     void
