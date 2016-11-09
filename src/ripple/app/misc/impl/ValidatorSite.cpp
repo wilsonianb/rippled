@@ -170,10 +170,13 @@ ValidatorSite::onTimer (
     if (sites_[siteIdx].pUrl.scheme == "https")
     {
         sp = std::make_shared<detail::WorkSSL>(
+            "GET",
+            "",
             sites_[siteIdx].pUrl.domain,
             sites_[siteIdx].pUrl.path,
             std::to_string(*sites_[siteIdx].pUrl.port),
-            app_.getIOService(),
+            true, /* verify */
+            io_service_,
             [this, siteIdx](error_code const& err, detail::response_type&& resp)
             {
                 onSiteFetch (err, std::move(resp), siteIdx);
@@ -182,6 +185,8 @@ ValidatorSite::onTimer (
     else
     {
         sp = std::make_shared<detail::WorkPlain>(
+            "GET",
+            "",
             sites_[siteIdx].pUrl.domain,
             sites_[siteIdx].pUrl.path,
             std::to_string(*sites_[siteIdx].pUrl.port),

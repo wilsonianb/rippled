@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012, 2013 Ripple Labs Inc.
+    Copyright (c) 2016 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -17,23 +17,29 @@
 */
 //==============================================================================
 
-#include <BeastConfig.h>
+#include <ripple/app/misc/detail/WorkPlain.h>
 
-#include <ripple/app/misc/CanonicalTXSet.cpp>
-#include <ripple/app/misc/FeeVoteImpl.cpp>
-#include <ripple/app/misc/HashRouter.cpp>
-#include <ripple/app/misc/NetworkOPs.cpp>
-#include <ripple/app/misc/SHAMapStoreImp.cpp>
-#include <ripple/app/misc/Validations.cpp>
+namespace ripple {
 
-#include <ripple/app/misc/detail/WorkPlain.cpp>
-#include <ripple/app/misc/detail/WorkSSL.cpp>
+namespace detail {
 
-#include <ripple/app/misc/impl/AccountTxPaging.cpp>
-#include <ripple/app/misc/impl/AmendmentTable.cpp>
-#include <ripple/app/misc/impl/LoadFeeTrack.cpp>
-#include <ripple/app/misc/impl/Manifest.cpp>
-#include <ripple/app/misc/impl/Transaction.cpp>
-#include <ripple/app/misc/impl/TxQ.cpp>
-#include <ripple/app/misc/impl/ValidatorList.cpp>
-#include <ripple/app/misc/impl/ValidatorSite.cpp>
+WorkPlain::WorkPlain(
+    std::string const& method, std::string const& body,
+    std::string const& host, std::string const& path,
+    std::string const& port, boost::asio::io_service& ios, callback_type cb)
+    : WorkBase (method, body, host, path, port, ios, cb)
+{
+}
+
+void
+WorkPlain::onConnect(error_code const& ec)
+{
+    if (ec)
+        return fail(ec);
+
+    onStart ();
+}
+
+} // detail
+
+} // ripple

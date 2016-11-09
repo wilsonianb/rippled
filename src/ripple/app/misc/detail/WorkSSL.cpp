@@ -17,42 +17,51 @@
 */
 //==============================================================================
 
-#ifndef RIPPLE_APP_MISC_DETAIL_WORKPLAIN_H_INCLUDED
-#define RIPPLE_APP_MISC_DETAIL_WORKPLAIN_H_INCLUDED
-
-#include <ripple/app/misc/detail/WorkBase.h>
+#include <ripple/app/misc/detail/WorkSSL.h>
+#include <boost/bind.hpp>
 
 namespace ripple {
 
 namespace detail {
 
-// Work over TCP/IP
-class WorkPlain : public WorkBase<WorkPlain>
-    , public std::enable_shared_from_this<WorkPlain>
+WorkSSL::WorkSSL(
+    std::string const& method, std::string const& body,
+    std::string const& host, std::string const& path,
+    std::string const& port, bool verify, boost::asio::io_service& ios,
+    callback_type cb)
+    : WorkBase(method, body, host, path, port, ios, cb)
+    , context_()
+    , stream_ (socket_, context_)
 {
-    friend class WorkBase<WorkPlain>;
+    stream_.set_verify_mode (verify ? boost::asio::ssl::verify_peer :
+        boost::asio::ssl::verify_none);
+    stream_.set_verify_callback (
+        std::bind (
+            &WorkSSL::rfc2818_verify, host_,
+            std::placeholders::_1, std::placeholders::_2));
+}
 
-public:
-    WorkPlain(
-        std::string const& method, std::string const& body,
-        std::string const& host, std::string const& path,
-        std::string const& port, boost::asio::io_service& ios,
-        callback_type cb);
-    ~WorkPlain() = default;
+void
+WorkSSL::onConnect(error_code const& ec)
+{
+    if (ec)
+        return fail(ec);
 
-private:
-    void
-    onConnect(error_code const& ec);
+    stream_.async_handshake(
+        boost::asio::ssl::stream_base::client,
+        strand_.wrap (boost::bind(&WorkSSL::onHandshake, shared_from_this(),
+            boost::asio::placeholders::error)));
+}
 
-    socket_type&
-    stream()
-    {
-        return socket_;
-    }
-};
+void
+WorkSSL::onHandshake(error_code const& ec)
+{
+    if (ec)
+        return fail(ec);
+
+    onStart ();
+}
 
 } // detail
 
 } // ripple
-
-#endif

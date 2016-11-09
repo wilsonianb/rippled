@@ -23,7 +23,6 @@
 #include <ripple/app/misc/detail/WorkBase.h>
 #include <ripple/basics/contract.h>
 #include <boost/asio/ssl.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
 
 namespace ripple {
@@ -63,9 +62,10 @@ private:
 
 public:
     WorkSSL(
-        std::string const& host,
-        std::string const& path, std::string const& port,
-        boost::asio::io_service& ios, callback_type cb);
+        std::string const& method, std::string const& body,
+        std::string const& host, std::string const& path,
+        std::string const& port, bool verify, boost::asio::io_service& ios,
+        callback_type cb);
     ~WorkSSL() = default;
 
 private:
@@ -91,44 +91,6 @@ private:
             boost::asio::ssl::rfc2818_verification (domain) (preverified, ctx);
     }
 };
-
-//------------------------------------------------------------------------------
-
-WorkSSL::WorkSSL(
-    std::string const& host,
-    std::string const& path, std::string const& port,
-    boost::asio::io_service& ios, callback_type cb)
-    : WorkBase (host, path, port, ios, cb)
-    , context_()
-    , stream_ (socket_, context_)
-{
-    stream_.set_verify_mode (boost::asio::ssl::verify_peer);
-    stream_.set_verify_callback (
-        std::bind (
-            &WorkSSL::rfc2818_verify, host_,
-            std::placeholders::_1, std::placeholders::_2));
-}
-
-void
-WorkSSL::onConnect(error_code const& ec)
-{
-    if (ec)
-        return fail(ec);
-
-    stream_.async_handshake(
-        boost::asio::ssl::stream_base::client,
-        strand_.wrap (boost::bind(&WorkSSL::onHandshake, shared_from_this(),
-            boost::asio::placeholders::error)));
-}
-
-void
-WorkSSL::onHandshake(error_code const& ec)
-{
-    if (ec)
-        return fail(ec);
-
-    onStart ();
-}
 
 } // detail
 

@@ -49,8 +49,10 @@ protected:
     using resolver_type = boost::asio::ip::tcp::resolver;
     using query_type = resolver_type::query;
     using request_type =
-        beast::http::request_v1<beast::http::empty_body>;
+        beast::http::request_v1<beast::http::string_body>;
 
+    std::string method_;
+    std::string body_;
     std::string host_;
     std::string path_;
     std::string port_;
@@ -65,9 +67,10 @@ protected:
 
 public:
     WorkBase(
+        std::string const& method, std::string const& body,
         std::string const& host, std::string const& path,
-        std::string const& port,
-        boost::asio::io_service& ios, callback_type cb);
+        std::string const& port, boost::asio::io_service& ios,
+        callback_type cb);
     ~WorkBase();
 
     Impl&
@@ -99,10 +102,13 @@ public:
 //------------------------------------------------------------------------------
 
 template<class Impl>
-WorkBase<Impl>::WorkBase(std::string const& host,
+WorkBase<Impl>::WorkBase(std::string const& method,
+    std::string const& body, std::string const& host,
     std::string const& path, std::string const& port,
     boost::asio::io_service& ios, callback_type cb)
-    : host_(host)
+    : method_(method)
+    , body_(body)
+    , host_(host)
     , path_(path)
     , port_(port)
     , cb_(std::move(cb))
@@ -178,12 +184,13 @@ template<class Impl>
 void
 WorkBase<Impl>::onStart()
 {
-    req_.method = "GET";
+    req_.method = method_;
     req_.url = path_.empty() ? "/" : path_;
     req_.version = 11;
     req_.headers.replace (
         "Host", host_ + ":" + port_);
     req_.headers.replace ("User-Agent", BuildInfo::getFullVersionString());
+    req_.body = body_;
     beast::http::prepare (req_);
 
     beast::http::async_write(impl().stream(), req_,

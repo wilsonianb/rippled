@@ -276,7 +276,12 @@ private:
         std::string msg);
 
     bool
+    onManifest (http_request_type const& req,
+        endpoint_type const& remote_endpoint);
+
+    bool
     processRequest (http_request_type const& req,
+        endpoint_type const& remote_endpoint,
         Handoff& handoff);
 
     void

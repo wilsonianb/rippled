@@ -18,6 +18,7 @@
 //==============================================================================
 
 #include <BeastConfig.h>
+#include <ripple/app/misc/detail/WorkSSL.h>
 #include <ripple/app/misc/HashRouter.h>
 #include <ripple/app/misc/NetworkOPs.h>
 #include <ripple/core/DatabaseCon.h>
@@ -37,6 +38,7 @@
 #include <ripple/protocol/STExchange.h>
 #include <ripple/beast/core/ByteOrder.h>
 #include <beast/core/detail/base64.hpp>
+#include <beast/core/to_string.hpp>
 #include <ripple/beast/core/LexicalCast.h>
 #include <beast/http.hpp>
 #include <beast/core/detail/ci_char_traits.hpp>
@@ -181,7 +183,7 @@ OverlayImpl::onHandoff (std::unique_ptr <beast::asio::ssl_bundle>&& ssl_bundle,
     beast::Journal journal (sink);
 
     Handoff handoff;
-    if (processRequest(request, handoff))
+    if (processRequest(request, remote_endpoint, handoff))
         return handoff;
     if (! isPeerUpgrade(request))
         return handoff;
@@ -829,22 +831,124 @@ OverlayImpl::json ()
 }
 
 bool
+OverlayImpl::onManifest (http_request_type const& req,
+    endpoint_type const& remote_endpoint)
+{
+    auto const manifestStr = beast::to_string(req.body.data());
+    if (auto mo = Manifest::make_Manifest (\
+        beast::detail::base64_decode(manifestStr)))
+    {
+        auto& hashRouter = app_.getHashRouter();
+        auto const hash = mo->hash ();
+
+        // check if source is a peer
+        auto const endpoint = beast::IPAddressConversion::from_asio(remote_endpoint);
+        for (auto const& e : ids_)
+        {
+            if (auto sp = e.second.lock())
+            {
+                if (sp->getRemoteAddress() == endpoint) &&
+                        !hashRouter.addSuppressionPeer (mo->hash (), sp->id()))
+                    return false;
+            }
+        }
+
+        hashRouter.addSuppression(mo->hash());
+
+        auto const serialized = mo->serialized;
+        auto const result = app_.manifestCache ().applyManifest (
+            std::move(*mo),
+            app_.validators());
+
+        if (result == ManifestDisposition::accepted ||
+            result == ManifestDisposition::untrusted)
+        {
+            app_.getOPs().pubManifest (
+                *Manifest::make_Manifest(serialized));
+        }
+
+        if (result == ManifestDisposition::accepted)
+        {
+            auto const toSkip = hashRouter.shouldRelay (hash);
+            if (toSkip)
+            {
+                for_each ([&](std::shared_ptr<PeerImp>&& sp)
+                {
+                    if (toSkip->count (sp->id ()))
+                        return;
+
+                    std::string portStr;
+                    if (sp->slot()->inbound())
+                    {
+                        if (auto port = sp->slot()->listening_port())
+                            portStr = std::to_string(*port);
+                        else
+                            return;
+                    }
+                    else
+                    {
+                        portStr = std::to_string(sp->getRemoteAddress().port());
+                    }
+
+                    auto work =
+                        std::make_shared<detail::WorkSSL>(
+                            "PUT",
+                            manifestStr,
+                            sp->getRemoteAddress().address().to_string(),
+                            "/manifest",
+                            portStr,
+                            false, /* verify */
+                            io_service_,
+                            [](error_code const& err, detail::response_type&& resp){});
+                    work->run();
+                });
+            }
+        }
+        else
+        {
+            // JLOG(journal.info()) << "Bad manifest from " << req.url;
+            return false;
+        }
+    }
+    else
+    {
+        // JLOG(journal.warn()) << "Malformed manifest from " << req.url;
+        return false;
+    }
+    return true;
+}
+
+bool
 OverlayImpl::processRequest (http_request_type const& req,
+    endpoint_type const& remote_endpoint,
     Handoff& handoff)
 {
-    if (req.url != "/crawl")
-        return false;
-
-    beast::http::response_v1<json_body> msg;
-    msg.version = req.version;
-    msg.status = 200;
-    msg.reason = "OK";
-    msg.headers.insert("Server", BuildInfo::getFullVersionString());
-    msg.headers.insert("Content-Type", "application/json");
-    msg.body["overlay"] = crawl();
-    prepare(msg, beast::http::connection::close);
-    handoff.response = std::make_shared<SimpleWriter>(msg);
-    return true;
+    if (req.url == "/crawl")
+    {
+        beast::http::response_v1<json_body> msg;
+        msg.version = req.version;
+        msg.status = 200;
+        msg.reason = "OK";
+        msg.headers.insert("Server", BuildInfo::getFullVersionString());
+        msg.headers.insert("Content-Type", "application/json");
+        msg.body["overlay"] = crawl();
+        prepare(msg, beast::http::connection::close);
+        handoff.response = std::make_shared<SimpleWriter>(msg);
+        return true;
+    }
+    else if (req.method == "PUT" && req.url == "/manifest")
+    {
+        onManifest (req, remote_endpoint);
+        http_response_type resp;
+        resp.version = req.version;
+        resp.status = 200;
+        resp.reason = "OK";
+        resp.headers.insert("Server", BuildInfo::getFullVersionString());
+        prepare(resp, beast::http::connection::close);
+        handoff.response = std::make_shared<SimpleWriter>(resp);
+        return true;
+    }
+    return false;
 }
 
 Overlay::PeerSequence
