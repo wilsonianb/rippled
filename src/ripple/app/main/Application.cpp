@@ -485,8 +485,7 @@ public:
             config_->VALIDATION_QUORUM))
 
         , validatorSites_ (std::make_unique<ValidatorSite> (
-            *validators_, *manifestCache_, *m_overlay, get_io_service(),
-            logs_->journal("ValidatorSite")))
+            *this, logs_->journal("ValidatorSite")))
 
         , serverHandler_ (make_ServerHandler (*this, *m_networkOPs, get_io_service (),
             *m_jobQueue, *m_networkOPs, *m_resourceManager, *m_collectorManager))
@@ -1106,8 +1105,6 @@ bool ApplicationImp::setup()
         return false;
     }
 
-    validatorSites_->start ();
-
     m_nodeStore->tune (config_->getSize (siNodeCacheSize), config_->getSize (siNodeCacheAge));
     m_ledgerMaster->tune (config_->getSize (siLedgerSize), config_->getSize (siLedgerAge));
     family().treecache().setTargetSize (config_->getSize (siTreeCacheSize));
@@ -1128,6 +1125,8 @@ bool ApplicationImp::setup()
         *serverHandler_, *m_resourceManager, *m_resolver, get_io_service(),
         *config_);
     add (*m_overlay); // add to PropertyStream
+
+    validatorSites_->start ();
 
     // start first consensus round
     if (! m_networkOPs->beginConsensus(m_ledgerMaster->getClosedLedger()->info().hash))

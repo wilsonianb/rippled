@@ -31,17 +31,11 @@ namespace ripple {
 auto constexpr DEFAULT_REFRESH_INTERVAL = std::chrono::minutes{5};
 
 ValidatorSite::ValidatorSite (
-    ValidatorList& validators,
-    ManifestCache& manifests,
-    Overlay& overlay,
-    boost::asio::io_service& io_service,
+    Application& app,
     beast::Journal j)
-    : validators_ (validators)
-    , manifests_ (manifests)
-    , overlay_ (overlay)
+    : app_ (app)
     , j_ (j)
-    , io_service_ (io_service)
-    , timer_ (io_service_)
+    , timer_ (app_.getIOService())
     , fetching_ (false)
     , pending_ (false)
     , stopping_ (false)
@@ -179,7 +173,7 @@ ValidatorSite::onTimer (
             sites_[siteIdx].pUrl.domain,
             sites_[siteIdx].pUrl.path,
             std::to_string(*sites_[siteIdx].pUrl.port),
-            io_service_,
+            app_.getIOService(),
             [this, siteIdx](error_code const& err, detail::response_type&& resp)
             {
                 onSiteFetch (err, std::move(resp), siteIdx);
@@ -191,7 +185,7 @@ ValidatorSite::onTimer (
             sites_[siteIdx].pUrl.domain,
             sites_[siteIdx].pUrl.path,
             std::to_string(*sites_[siteIdx].pUrl.port),
-            io_service_,
+            app_.getIOService(),
             [this, siteIdx](error_code const& err, detail::response_type&& resp)
             {
                 onSiteFetch (err, std::move(resp), siteIdx);
@@ -233,11 +227,11 @@ ValidatorSite::onSiteFetch(
 
             ManifestDisposition result = ManifestDisposition::invalid;
             if (manifest)
-                result = manifests_.applyManifest (
+                result = app_.manifestCache().applyManifest (
                     Manifest (
                         manifest->serialized, manifest->masterKey,
                         manifest->signingKey, manifest->sequence),
-                    validators_);
+                    app_.validators());
 
             if (! manifest || result == ManifestDisposition::invalid)
             {
@@ -260,7 +254,7 @@ ValidatorSite::onSiteFetch(
                     auto const& s = manifest->serialized;
                     auto& tm_e = *tm.add_list();
                     tm_e.set_stobject(s.data(), s.size());
-                    overlay_.send (tm);
+                    app_.overlay().send (tm);
                 }
 
                 if (manifest->revoked())
@@ -271,7 +265,7 @@ ValidatorSite::onSiteFetch(
                             TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
                         ") from " << sites_[siteIdx].uri;
                 }
-                else if (ListDisposition::accepted == validators_.applyList (
+                else if (ListDisposition::accepted == app_.validators().applyList (
                     manifest->masterKey,
                     body["blob"].asString (),
                     body["signature"].asString(),

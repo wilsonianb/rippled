@@ -253,8 +253,7 @@ private:
 
         Env env (*this);
         auto trustedSites = std::make_unique<ValidatorSite> (
-            env.app().validators(), env.app().manifestCache(),
-            env.app().overlay(), env.app().getIOService(), beast::Journal());
+            env.app(), beast::Journal());
 
         // load should accept empty sites list
         std::vector<std::string> emptyCfgSites;
@@ -292,11 +291,9 @@ private:
 
         Env env (*this);
         auto& ioService = env.app ().getIOService ();
-        auto& manifests = env.app ().manifestCache ();
-        auto& overlay   = env.app ().overlay ();
+        auto& trustedKeys = env.app ().validators ();
+
         beast::Journal journal;
-        auto trustedKeys = std::make_unique<ValidatorList> (
-            manifests, journal);
 
         PublicKey emptyLocalKey;
         std::vector<std::string> emptyCfgKeys;
@@ -326,7 +323,7 @@ private:
             toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, masterPublic1),
             toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, masterPublic2)});
 
-        BEAST_EXPECT(trustedKeys->load (
+        BEAST_EXPECT(trustedKeys.load (
             emptyLocalKey, emptyCfgKeys,
             cfgKeys, emptyCfgManifest));
 
@@ -367,8 +364,7 @@ private:
             {"http://127.0.0.1:" + std::to_string(port1) + "/validators"});
 
             auto sites = std::make_unique<ValidatorSite> (
-                *trustedKeys, manifests, overlay,
-                env.app ().getIOService (), journal);
+                env.app (), journal);
 
             sites->load (cfgSites);
             sites->start();
@@ -376,8 +372,8 @@ private:
 
             for (auto const& val : list1)
             {
-                BEAST_EXPECT(trustedKeys->listed (val.masterPublicKey));
-                BEAST_EXPECT(trustedKeys->listed (val.signingPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.masterPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.signingPublicKey));
             }
         }
         {
@@ -386,8 +382,7 @@ private:
             "http://127.0.0.1:" + std::to_string(port2) + "/validators"});
 
             auto sites = std::make_unique<ValidatorSite> (
-                *trustedKeys, manifests, overlay,
-                env.app ().getIOService (), journal);
+                env.app (), journal);
 
             sites->load (cfgSites);
             sites->start();
@@ -395,14 +390,14 @@ private:
 
             for (auto const& val : list1)
             {
-                BEAST_EXPECT(trustedKeys->listed (val.masterPublicKey));
-                BEAST_EXPECT(trustedKeys->listed (val.signingPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.masterPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.signingPublicKey));
             }
 
             for (auto const& val : list2)
             {
-                BEAST_EXPECT(trustedKeys->listed (val.masterPublicKey));
-                BEAST_EXPECT(trustedKeys->listed (val.signingPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.masterPublicKey));
+                BEAST_EXPECT(trustedKeys.listed (val.signingPublicKey));
             }
         }
     }

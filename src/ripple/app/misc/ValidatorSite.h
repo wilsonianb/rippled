@@ -80,16 +80,13 @@ private:
         clock_type::time_point nextRefresh;
     };
 
-    ValidatorList& validators_;
-    ManifestCache& manifests_;
-    Overlay& overlay_;
+    Application& app_;
     beast::Journal j_;
     std::mutex mutable sites_mutex_;
     std::mutex mutable state_mutex_;
 
     std::condition_variable cv_;
     std::weak_ptr<detail::Work> work_;
-    boost::asio::io_service& io_service_;
     boost::asio::basic_waitable_timer<clock_type> timer_;
 
     // A list is currently being fetched from a site
@@ -104,10 +101,7 @@ private:
 
 public:
     ValidatorSite (
-        ValidatorList& validators,
-        ManifestCache& manifests,
-        Overlay& overlay,
-        boost::asio::io_service& io_service,
+        Application& app,
         beast::Journal j);
     ~ValidatorSite ();
 
