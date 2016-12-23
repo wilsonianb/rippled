@@ -100,6 +100,26 @@ private:
     }
 
     void
+    testGenesisQuorum ()
+    {
+        testcase ("Genesis Quorum");
+
+        beast::Journal journal;
+        ManifestCache manifests;
+        {
+            auto trustedKeys = std::make_unique <ValidatorList> (
+                manifests, journal);
+            BEAST_EXPECT(trustedKeys->quorum () == 1);
+        }
+        {
+            std::size_t minQuorum = 0;
+            auto trustedKeys = std::make_unique <ValidatorList> (
+                manifests, journal, minQuorum);
+            BEAST_EXPECT(trustedKeys->quorum () == minQuorum);
+        }
+    }
+
+    void
     testConfigLoad ()
     {
         testcase ("Config Load");
@@ -647,6 +667,7 @@ public:
     void
     run() override
     {
+        testGenesisQuorum ();
         testConfigLoad ();
         testApplyList ();
         testUpdate ();

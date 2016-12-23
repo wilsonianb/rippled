@@ -33,7 +33,7 @@ ValidatorList::ValidatorList (
     boost::optional<std::size_t> minimumQuorum)
     : manifests_ (manifests)
     , j_ (j)
-    , quorum_ (0)
+    , quorum_ (minimumQuorum ? *minimumQuorum : 1) // Genesis ledger quorum
     , minimumQuorum_ (minimumQuorum)
 {
 }
