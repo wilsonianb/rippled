@@ -230,16 +230,20 @@ ValidatorList::applyList (
             val.isMember ("validation_public_key") &&
             val["validation_public_key"].isString ())
         {
-            auto const id = parseBase58<PublicKey>(
-                TokenType::TOKEN_NODE_PUBLIC,
-                val["validation_public_key"].asString ());
+            std::pair<Blob, bool> ret (strUnHex (
+                val["validation_public_key"].asString ()));
 
-            if (! id)
+            if (! ret.second || ! ret.first.size ())
+            {
                 JLOG (j_.error()) <<
                     "Invalid node identity: " <<
                     val["validation_public_key"].asString ();
+            }
             else
-                publisherList.push_back (*id);
+            {
+                publisherList.push_back (
+                    PublicKey(Slice{ ret.first.data (), ret.first.size() }));
+            }
         }
     }
 

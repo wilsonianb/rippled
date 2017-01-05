@@ -81,9 +81,9 @@ private:
 
         for (auto const& val : validators)
         {
-            data += "{\"validation_public_key\":\"" +
-                toBase58 (TokenType::TOKEN_NODE_PUBLIC, val) + "\"},";
+            data += "{\"validation_public_key\":\"" + strHex(val) + "\"},";
         }
+
         data.pop_back();
         data += "]}";
         return beast::detail::base64_encode(data);
