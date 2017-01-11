@@ -29,9 +29,11 @@ namespace ripple {
 
 ValidatorList::ValidatorList (
     ManifestCache& manifests,
+    TimeKeeper& timeKeeper,
     beast::Journal j,
     boost::optional<std::size_t> minimumQuorum)
     : manifests_ (manifests)
+    , timeKeeper_ (timeKeeper)
     , j_ (j)
     , quorum_ (minimumQuorum ? *minimumQuorum : 1) // Genesis ledger quorum
     , minimumQuorum_ (minimumQuorum)
@@ -219,6 +221,7 @@ ValidatorList::applyList (
     // Update publisher's list
     Json::Value const& newList = list["validators"];
     publisherLists_[pubKey].sequence = list["sequence"].asUInt ();
+    publisherLists_[pubKey].expiration = list["expiration"].asUInt ();
     std::vector<PublicKey>& publisherList = publisherLists_[pubKey].list;
 
     std::vector<PublicKey> oldList = publisherList;
@@ -320,10 +323,13 @@ ValidatorList::verify (
         return ListDisposition::invalid;
 
     if (list.isMember("sequence") && list["sequence"].isInt() &&
+        list.isMember("expiration") && list["expiration"].isInt() &&
         list.isMember("validators") && list["validators"].isArray())
     {
         auto const sequence = list["sequence"].asUInt ();
-        if (sequence <= iter->second.sequence)
+        auto const expiration = list["expiration"].asUInt ();
+        if (sequence <= iter->second.sequence ||
+                expiration <= timeKeeper_.now().time_since_epoch().count())
             return ListDisposition::stale;
     }
     else
@@ -384,10 +390,8 @@ ValidatorList::trustedPublisher (PublicKey const& identity) const
 }
 
 bool
-ValidatorList::removePublisher (PublicKey const& publisherKey)
+ValidatorList::removePublisherList (PublicKey const& publisherKey)
 {
-    boost::unique_lock<boost::shared_mutex> read_lock{mutex_};
-
     auto const iList = publisherLists_.find (publisherKey);
     if (iList == publisherLists_.end ())
         return false;
@@ -408,7 +412,6 @@ ValidatorList::removePublisher (PublicKey const& publisherKey)
             --iVal->second;
     }
 
-    publisherLists_.erase (iList);
     return true;
 }
 

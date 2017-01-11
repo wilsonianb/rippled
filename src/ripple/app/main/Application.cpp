@@ -482,7 +482,7 @@ public:
             logs_->journal("ManifestCache")))
 
         , validators_ (std::make_unique<ValidatorList> (
-            *manifestCache_, logs_->journal("ValidatorList"),
+            *manifestCache_, *timeKeeper_, logs_->journal("ValidatorList"),
             config_->VALIDATION_QUORUM))
 
         , validatorSites_ (std::make_unique<ValidatorSite> (

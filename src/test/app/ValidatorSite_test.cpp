@@ -57,13 +57,16 @@ public:
             boost::asio::io_service& ios,
             std::pair<PublicKey, SecretKey> keys,
             int sequence,
+            std::size_t expiration,
             int version,
             std::vector <PublicKey> validators)
         : sock_(ios)
         , acceptor_(ios)
     {
         std::string data =
-            "{\"sequence\":" + std::to_string(sequence) + ",\"validators\":[";
+            "{\"sequence\":" + std::to_string(sequence) +
+            ",\"expiration\":" + std::to_string(expiration) +
+            ",\"validators\":[";
 
         for (auto const& val : validators)
         {
@@ -291,14 +294,16 @@ private:
 
         auto const sequence = 1;
         auto const version = 1;
+        NetClock::time_point const expiration =
+            env.timeKeeper().now() + 3600s;
 
         http_sync_server server1(
-            ep1, ioService, publisherKeys1,
-            sequence, version, list1);
+            ep1, ioService, publisherKeys1, sequence,
+            expiration.time_since_epoch().count(), version, list1);
 
         http_sync_server server2(
-            ep2, ioService, publisherKeys2,
-            sequence, version, list2);
+            ep2, ioService, publisherKeys2, sequence,
+            expiration.time_since_epoch().count(), version, list2);
 
         {
             // fetch single site

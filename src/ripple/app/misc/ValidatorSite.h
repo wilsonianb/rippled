@@ -40,10 +40,12 @@ namespace ripple {
     Fetched lists are expected to be in JSON format and contain the following
     fields:
 
-    @li @c "blob": Base64-encoded JSON string containing a @c "sequence" and
-        @c "validators" field. @c "validators" contains an array of objects with
-        @c "validation_public_key" and @c "manifest" fields.
-        @c "validation_public_key" should be the master public key.
+    @li @c "blob": Base64-encoded JSON string containing a @c "sequence", @c
+        "expiration", and @c "validators" field. @c "expiration" contains the
+        Ripple timestamp (seconds since January 1st, 2000 (00:00 UTC)) for when
+        the list expires. @c "validators" contains an array of objects with a
+        @c "validation_public_key" field.
+        @c "validation_public_key" should be hex-encoded master public key.
 
     @li @c "signature": Hex-encoded signature of the blob using the publisher's
         signing key.

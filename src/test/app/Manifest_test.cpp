@@ -21,6 +21,7 @@
 #include <ripple/app/misc/ValidatorList.h>
 #include <ripple/basics/contract.h>
 #include <ripple/basics/StringUtilities.h>
+#include <test/support/jtx.h>
 #include <test/support/TestSuite.h>
 #include <ripple/core/DatabaseCon.h>
 #include <ripple/app/main/DBInit.h>
@@ -32,7 +33,7 @@
 #include <boost/utility/in_place_factory.hpp>
 
 namespace ripple {
-namespace tests {
+namespace test {
 
 class Manifest_test : public beast::unit_test::suite
 {
@@ -158,7 +159,9 @@ public:
             m.save (dbCon);
 
             beast::Journal journal;
-            auto unl = std::make_unique<ValidatorList> (m, journal);
+            jtx::Env env (*this);
+            auto unl = std::make_unique<ValidatorList> (
+                m, env.timeKeeper(), journal);
 
             auto getPopulatedManifests =
                     [](ManifestCache const& cache) -> std::vector<Manifest const*>
@@ -254,11 +257,13 @@ public:
         testcase ("getKeys");
 
         beast::Journal journal;
+        jtx::Env env (*this);
         ManifestCache cache (journal);
         auto const sk  = randomSecretKey();
         auto const pk  = derivePublicKey(KeyType::ed25519, sk);
 
-        auto unl = std::make_unique<ValidatorList> (cache, journal);
+        auto unl = std::make_unique<ValidatorList> (
+            cache, env.timeKeeper(), journal);
         PublicKey emptyLocalKey;
         std::vector<std::string> cfgManifest;
         std::vector<std::string> validators;
@@ -362,7 +367,9 @@ public:
                 true);  // broken
             auto const fake = s_b1.serialized + '\0';
 
-            auto unl = std::make_unique<ValidatorList> (cache, journal);
+            jtx::Env env (*this);
+            auto unl = std::make_unique<ValidatorList> (
+                cache, env.timeKeeper(), journal);
 
             BEAST_EXPECT(cache.applyManifest (clone (s_a0), *unl) == untrusted);
 
@@ -410,5 +417,5 @@ public:
 
 BEAST_DEFINE_TESTSUITE(Manifest,app,ripple);
 
-} // tests
+} // test
 } // ripple

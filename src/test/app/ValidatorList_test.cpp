@@ -20,6 +20,7 @@
 #include <beast/core/detail/base64.hpp>
 #include <ripple/basics/Slice.h>
 #include <ripple/basics/strHex.h>
+#include <test/support/jtx.h>
 #include <test/support/TestSuite.h>
 #include <ripple/app/misc/ValidatorList.h>
 #include <ripple/protocol/digest.h>
@@ -28,8 +29,9 @@
 #include <ripple/protocol/SecretKey.h>
 #include <ripple/protocol/Sign.h>
 
+
 namespace ripple {
-namespace tests {
+namespace test {
 
 class ValidatorList_test : public beast::unit_test::suite
 {
@@ -74,10 +76,13 @@ private:
     std::string
     makeList (
         std::vector <PublicKey> const& validators,
-        std::size_t sequence)
+        std::size_t sequence,
+        std::size_t expiration)
     {
         std::string data =
-            "{\"sequence\":" + std::to_string(sequence) + ",\"validators\":[";
+            "{\"sequence\":" + std::to_string(sequence) +
+            ",\"expiration\":" + std::to_string(expiration) +
+            ",\"validators\":[";
 
         for (auto const& val : validators)
         {
@@ -106,15 +111,16 @@ private:
 
         beast::Journal journal;
         ManifestCache manifests;
+        jtx::Env env (*this);
         {
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
             BEAST_EXPECT(trustedKeys->quorum () == 1);
         }
         {
             std::size_t minQuorum = 0;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal, minQuorum);
+                manifests, env.timeKeeper(), journal, minQuorum);
             BEAST_EXPECT(trustedKeys->quorum () == minQuorum);
         }
     }
@@ -125,6 +131,7 @@ private:
         testcase ("Config Load");
 
         beast::Journal journal;
+        jtx::Env env (*this);
         PublicKey emptyLocalKey;
         std::vector<std::string> emptyCfgKeys;
         std::vector<std::string> emptyCfgPublishers;
@@ -175,7 +182,7 @@ private:
         {
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             // Correct (empty) configuration
             BEAST_EXPECT(trustedKeys->load (
@@ -219,7 +226,7 @@ private:
             // load should add validator keys from config
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             BEAST_EXPECT(trustedKeys->load (
                 emptyLocalKey, cfgKeys,
@@ -270,7 +277,7 @@ private:
             // local validator key on config list
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             auto const localSigningPublic = parseBase58<PublicKey> (
                 TokenType::TOKEN_NODE_PUBLIC, cfgKeys.front());
@@ -287,7 +294,7 @@ private:
             // local validator key not on config list
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             auto const localSigningPublic = randomNode();
             BEAST_EXPECT(trustedKeys->load (
@@ -302,7 +309,7 @@ private:
             // local validator key (with manifest) not on config list
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             BEAST_EXPECT(trustedKeys->load (
                 localSigningPublic, cfgKeys,
@@ -316,7 +323,7 @@ private:
         {
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, journal);
+                manifests, env.timeKeeper(), journal);
 
             // load should reject invalid validator list signing keys
             std::vector<std::string> badPublishers(
@@ -360,8 +367,9 @@ private:
 
         beast::Journal journal;
         ManifestCache manifests;
+        jtx::Env env (*this);
         auto trustedKeys = std::make_unique<ValidatorList> (
-            manifests, journal);
+            manifests, env.app().timeKeeper(), journal);
 
         auto const publisherKeys1 = randomKeyPair(KeyType::secp256k1);
         std::vector<std::string> cfgKeys1({
@@ -385,10 +393,23 @@ private:
         while (list2.size () < listSize)
             list2.push_back (randomNode());
 
-        // apply single list
+        // do not apply expired list
         auto const version = 1;
         auto const sequence = 1;
-        auto const blob1 = makeList (list1, sequence);
+        auto const expiredBlob = makeList (
+            list1, sequence,
+            env.timeKeeper().now().time_since_epoch().count());
+        auto const expiredSig = signList (expiredBlob, publisherKeys1);
+
+        BEAST_EXPECT(ListDisposition::stale ==
+            trustedKeys->applyList (
+                publisherKeys1.first, expiredBlob, expiredSig, version));
+
+        // apply single list
+        NetClock::time_point const expiration =
+            env.timeKeeper().now() + 3600s;
+        auto const blob1 = makeList (
+            list1, sequence, expiration.time_since_epoch().count());
         auto const sig1 = signList (blob1, publisherKeys1);
 
         BEAST_EXPECT(ListDisposition::accepted == trustedKeys->applyList (
@@ -409,7 +430,8 @@ private:
 
         // apply list with highest sequence number
         auto const sequence2 = 2;
-        auto const blob2 = makeList (list2, sequence2);
+        auto const blob2 = makeList (
+            list2, sequence2, expiration.time_since_epoch().count());
         auto const sig2 = signList (blob2, publisherKeys1);
 
         BEAST_EXPECT(ListDisposition::accepted ==
@@ -439,8 +461,9 @@ private:
 
         PublicKey emptyLocalKey;
         ManifestCache manifests;
+        jtx::Env env (*this);
         auto trustedKeys = std::make_unique <ValidatorList> (
-            manifests, beast::Journal ());
+            manifests, env.timeKeeper(), beast::Journal ());
 
         std::vector<std::string> cfgPublishers;
         std::vector<std::string> emptyCfgManifest;
@@ -573,7 +596,7 @@ private:
             auto const minQuorum = 0;
             ManifestCache manifests;
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, beast::Journal (), minQuorum);
+                manifests, env.timeKeeper(), beast::Journal (), minQuorum);
 
             auto const node = randomNode ();
             std::vector<std::string> cfgKeys ({
@@ -594,7 +617,7 @@ private:
         {
             // Increase quorum when running as an unlisted validator
             auto trustedKeys = std::make_unique <ValidatorList> (
-                manifests, beast::Journal ());
+                manifests, env.timeKeeper(), beast::Journal ());
 
             std::vector<PublicKey> keys ({ randomNode (), randomNode () });
             hash_set<PublicKey> activeValidators ({ keys[0], keys[1] });
@@ -613,6 +636,47 @@ private:
             // local validator key is always trusted
             BEAST_EXPECT(trustedKeys->trusted (localKey));
         }
+        {
+            // Remove expired published list
+            auto trustedKeys = std::make_unique<ValidatorList> (
+                manifests, env.app().timeKeeper(), beast::Journal ());
+
+            PublicKey emptyLocalKey;
+            std::vector<std::string> emptyCfgKeys;
+            auto const signingKeys = randomKeyPair(KeyType::secp256k1);
+
+            std::vector<std::string> cfgKeys ({
+                toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, signingKeys.first)});
+            std::vector<std::string> emptyCfgManifest;
+
+            BEAST_EXPECT(trustedKeys->load (
+                emptyLocalKey, emptyCfgKeys,
+                cfgKeys, emptyCfgManifest));
+
+            std::vector<PublicKey> list ({randomNode()});
+            hash_set<PublicKey> activeValidators ({ list[0] });
+
+            // do not apply expired list
+            auto const version = 1;
+            auto const sequence = 1;
+            NetClock::time_point const expiration =
+                env.timeKeeper().now() + 60s;
+            auto blob = makeList (
+                list, sequence, expiration.time_since_epoch().count());
+
+            auto const sig = signList (blob, signingKeys);
+
+            BEAST_EXPECT(ListDisposition::accepted ==
+                trustedKeys->applyList (
+                    signingKeys.first, blob, sig, version));
+
+            trustedKeys->onConsensusStart (activeValidators);
+            BEAST_EXPECT(trustedKeys->trusted (list[0]));
+
+            env.timeKeeper().set(expiration);
+            trustedKeys->onConsensusStart (activeValidators);
+            BEAST_EXPECT(! trustedKeys->trusted (list[0]));
+        }
     }
 
 public:
@@ -628,5 +692,5 @@ public:
 
 BEAST_DEFINE_TESTSUITE(ValidatorList, app, ripple);
 
-} // tests
+} // test
 } // ripple

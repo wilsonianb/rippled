@@ -23,6 +23,7 @@
 #include <ripple/app/misc/Manifest.h>
 #include <ripple/basics/Log.h>
 #include <ripple/basics/UnorderedContainers.h>
+#include <ripple/core/TimeKeeper.h>
 #include <ripple/crypto/csprng.h>
 #include <ripple/protocol/PublicKey.h>
 #include <boost/iterator/counting_iterator.hpp>
@@ -66,9 +67,11 @@ enum class ListDisposition
 
     New lists are expected to include the following data:
 
-    @li @c "blob": Base64-encoded JSON string containing a @c "sequence" and
-        @c "validators" field. @c "validators" contains an array of objects with
-        a @c "validation_public_key" field.
+    @li @c "blob": Base64-encoded JSON string containing a @c "sequence", @c
+        "expiration", and @c "validators" field. @c "expiration" contains the
+        Ripple timestamp (seconds since January 1st, 2000 (00:00 UTC)) for when
+        the list expires. @c "validators" contains an array of objects with a
+        @c "validation_public_key" field.
         @c "validation_public_key" should be hex-encoded master public key.
 
     @li @c "signature": Hex-encoded signature of the blob using the publisher's
@@ -98,9 +101,11 @@ class ValidatorList
     {
         std::vector<PublicKey> list;
         std::size_t sequence;
+        std::size_t expiration;
     };
 
     ManifestCache& manifests_;
+    TimeKeeper& timeKeeper_;
     beast::Journal j_;
     boost::shared_mutex mutable mutex_;
 
@@ -121,6 +126,7 @@ class ValidatorList
 public:
     ValidatorList (
         ManifestCache& manifests,
+        TimeKeeper& timeKeeper,
         beast::Journal j,
         boost::optional<std::size_t> minimumQuorum = boost::none);
     ~ValidatorList ();
@@ -275,19 +281,6 @@ public:
     trustedPublisher (
         PublicKey const& identity) const;
 
-    /** Stop trusting lists signed by publisher's public key.
-
-        @param publisherKey Publisher public key
-
-        @return `false` if key was not trusted
-
-        @par Thread Safety
-
-        May be called concurrently
-    */
-    bool
-    removePublisher (PublicKey const& publisherKey);
-
     /** Invokes the callback once for every listed validation public key.
 
         @note Undefined behavior results when calling ValidatorList members from
@@ -318,6 +311,20 @@ private:
         PublicKey const& pubKey,
         std::string const& blob,
         std::string const& signature);
+
+    /** Stop trusting publisher's list of keys.
+
+        @param publisherKey Publisher public key
+
+        @return `false` if key was not trusted
+
+        @par Thread Safety
+
+        Calling public member function is expected to lock mutex
+    */
+    bool
+    removePublisherList (PublicKey const& publisherKey);
+
 };
 
 //------------------------------------------------------------------------------
@@ -328,6 +335,15 @@ ValidatorList::onConsensusStart (
     KeySet const& seenValidators)
 {
     boost::unique_lock<boost::shared_mutex> read_lock{mutex_};
+
+    // Remove any expired published lists
+    for (auto const& list : publisherLists_)
+    {
+        if (list.second.expiration &&
+                list.second.expiration <=
+                timeKeeper_.now().time_since_epoch().count())
+            removePublisherList (list.first);
+    }
 
     std::multimap<std::size_t, PublicKey> rankedKeys;
     bool localKeyListed = false;
