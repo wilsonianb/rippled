@@ -19,6 +19,7 @@
 
 #include <ripple/app/misc/detail/WorkPlain.h>
 #include <ripple/app/misc/detail/WorkSSL.h>
+#include <ripple/app/misc/ValidatorList.h>
 #include <ripple/app/misc/ValidatorSite.h>
 #include <ripple/basics/Slice.h>
 #include <ripple/json/json_reader.h>
@@ -218,64 +219,51 @@ ValidatorSite::onSiteFetch(
         if (r.parse(res.body.data(), body) &&
             body.isObject () &&
             body.isMember("blob") && body["blob"].isString () &&
-            body.isMember("manifest") && body["manifest"].isString () &&
+            body.isMember("public_key") && body["public_key"].isString () &&
             body.isMember("signature") && body["signature"].isString() &&
             body.isMember("version") && body["version"].isInt())
         {
-            auto manifest = Manifest::make_Manifest (beast::detail::base64_decode(
-                body["manifest"].asString ()));
 
-            ManifestDisposition result = ManifestDisposition::invalid;
-            if (manifest)
-                result = app_.manifestCache().applyManifest (
-                    Manifest (
-                        manifest->serialized, manifest->masterKey,
-                        manifest->signingKey, manifest->sequence),
-                    app_.validators());
+            std::pair<Blob, bool> ret (strUnHex (
+                body["public_key"].asString ()));
 
-            if (! manifest || result == ManifestDisposition::invalid)
+            if (! ret.second || ! ret.first.size ())
             {
                 JLOG (j_.warn()) <<
-                    "Invalid manifest from " << sites_[siteIdx].uri;
-            }
-            else if (result == ManifestDisposition::untrusted)
-            {
-               JLOG (j_.warn()) <<
-                    "Untrusted validator list signing public key (" <<
-                    toBase58(TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
-                    ") from " << sites_[siteIdx].uri;
+                    "Invalid publisher public key: " <<
+                    body["public_key"].asString ();
             }
             else
             {
-                if (result == ManifestDisposition::accepted)
-                {
-                    // Send manifest to all directly connected peers
-                    protocol::TMManifests tm;
-                    auto const& s = manifest->serialized;
-                    auto& tm_e = *tm.add_list();
-                    tm_e.set_stobject(s.data(), s.size());
-                    app_.overlay().send (tm);
-                }
-
-                if (manifest->revoked())
-                {
-                    JLOG (j_.warn()) <<
-                        "Revoked validator list signing public key (" <<
-                        toBase58(
-                            TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
-                        ") from " << sites_[siteIdx].uri;
-                }
-                else if (ListDisposition::accepted == app_.validators().applyList (
-                    manifest->masterKey,
+                auto const pubKey =
+                    PublicKey(Slice{ ret.first.data (), ret.first.size() });
+                auto const disp = app_.validators().applyList (
+                    pubKey,
                     body["blob"].asString (),
                     body["signature"].asString(),
-                    body["version"].asUInt()))
+                    body["version"].asUInt());
+
+                if (ListDisposition::accepted == disp)
                 {
                     JLOG (j_.debug()) <<
                         "Applied new validator list for " <<
                         toBase58(
-                            TokenType::TOKEN_NODE_PUBLIC, manifest->masterKey) <<
+                            TokenType::TOKEN_NODE_PUBLIC, pubKey) <<
                         " from " << sites_[siteIdx].uri;
+                }
+                else if (ListDisposition::stale == disp)
+                {
+                    JLOG (j_.warn()) <<
+                        "Stale validator list for (" <<
+                        toBase58(TokenType::TOKEN_NODE_PUBLIC, pubKey) <<
+                        ") from " << sites_[siteIdx].uri;
+                }
+                else if (ListDisposition::untrusted == disp)
+                {
+                    JLOG (j_.warn()) <<
+                        "Untrusted validator list signing public key (" <<
+                        toBase58(TokenType::TOKEN_NODE_PUBLIC, pubKey) <<
+                        ") from " << sites_[siteIdx].uri;
                 }
             }
 

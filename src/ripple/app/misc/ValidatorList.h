@@ -69,10 +69,13 @@ enum class ListDisposition
     @li @c "blob": Base64-encoded JSON string containing a @c "sequence" and
         @c "validators" field. @c "validators" contains an array of objects with
         a @c "validation_public_key" field.
-        @c "validation_public_key" should be the master public key.
+        @c "validation_public_key" should be hex-encoded master public key.
 
     @li @c "signature": Hex-encoded signature of the blob using the publisher's
         signing key.
+
+    @li @c "public_key": Hex-encoded publisher public key. Ed25519 public keys
+        are expected to be preceded with 0xed.
 
     @li @c "version": 1
 

@@ -310,7 +310,7 @@ ValidatorList::verify (
     auto const data = beast::detail::base64_decode (blob);
     if (! sig.second ||
         ! ripple::verify (
-            manifests_.getSigningKey (pubKey),
+            pubKey,
             makeSlice(data),
             makeSlice(sig.first)))
         return ListDisposition::invalid;

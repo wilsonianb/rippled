@@ -95,8 +95,8 @@ private:
         std::pair<PublicKey, SecretKey> const& keys)
     {
         auto const data = beast::detail::base64_decode (blob);
-        return strHex(signDigest(
-            keys.first, keys.second, sha512Half(makeSlice(data))));
+        return strHex(sign(
+            keys.first, keys.second, makeSlice(data)));
     }
 
     void
@@ -363,11 +363,9 @@ private:
         auto trustedKeys = std::make_unique<ValidatorList> (
             manifests, journal);
 
-        auto const masterSecret1 = randomSecretKey();
-        auto const masterPublic1 =
-            derivePublicKey(KeyType::ed25519, masterSecret1);
+        auto const publisherKeys1 = randomKeyPair(KeyType::secp256k1);
         std::vector<std::string> cfgKeys1({
-            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, masterPublic1)});
+            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, publisherKeys1.first)});
         PublicKey emptyLocalKey;
         std::vector<std::string> emptyCfgKeys;
         std::vector<std::string> emptyCfgManifest;
@@ -375,13 +373,6 @@ private:
         BEAST_EXPECT(trustedKeys->load (
             emptyLocalKey, emptyCfgKeys,
             cfgKeys1, emptyCfgManifest));
-
-        auto const signingKeys1 = randomKeyPair(KeyType::secp256k1);
-
-        auto manifest1 = Manifest::make_Manifest (makeManifestString (
-            masterPublic1, masterSecret1,
-            signingKeys1.first, signingKeys1.second, 1));
-        manifests.applyManifest (std::move (*manifest1), *trustedKeys);
 
         auto constexpr listSize = 20;
         std::vector<PublicKey> list1;
@@ -398,10 +389,10 @@ private:
         auto const version = 1;
         auto const sequence = 1;
         auto const blob1 = makeList (list1, sequence);
-        auto const sig1 = signList (blob1, signingKeys1);
+        auto const sig1 = signList (blob1, publisherKeys1);
 
         BEAST_EXPECT(ListDisposition::accepted == trustedKeys->applyList (
-            masterPublic1, blob1, sig1, version));
+            publisherKeys1.first, blob1, sig1, version));
 
         for (auto const& val : list1)
             BEAST_EXPECT(trustedKeys->listed (val));
@@ -414,16 +405,16 @@ private:
         auto const badVersion = 666;
         BEAST_EXPECT(ListDisposition::unsupported_version ==
             trustedKeys->applyList (
-                masterPublic1, blob1, sig1, badVersion));
+                publisherKeys1.first, blob1, sig1, badVersion));
 
         // apply list with highest sequence number
         auto const sequence2 = 2;
         auto const blob2 = makeList (list2, sequence2);
-        auto const sig2 = signList (blob2, signingKeys1);
+        auto const sig2 = signList (blob2, publisherKeys1);
 
         BEAST_EXPECT(ListDisposition::accepted ==
             trustedKeys->applyList (
-                masterPublic1, blob2, sig2, version));
+                publisherKeys1.first, blob2, sig2, version));
 
         for (auto const& val : list1)
             BEAST_EXPECT(! trustedKeys->listed (val));
@@ -434,50 +425,11 @@ private:
         // do not re-apply lists with past or current sequence numbers
         BEAST_EXPECT(ListDisposition::stale ==
             trustedKeys->applyList (
-                masterPublic1, blob1, sig1, version));
+                publisherKeys1.first, blob1, sig1, version));
 
         BEAST_EXPECT(ListDisposition::stale ==
             trustedKeys->applyList (
-                masterPublic1, blob2, sig2, version));
-
-        // apply list with new publisher key updated by manifest
-        auto const signingKeys2 = randomKeyPair(KeyType::secp256k1);
-        auto manifest2 = Manifest::make_Manifest(makeManifestString (
-            masterPublic1, masterSecret1,
-            signingKeys2.first, signingKeys2.second, 2));
-        manifests.applyManifest (std::move (*manifest2), *trustedKeys);
-
-        auto const sequence3 = 3;
-        auto const blob3 = makeList (list1, sequence3);
-        auto const sig3 = signList (blob3, signingKeys2);
-
-        BEAST_EXPECT(ListDisposition::accepted ==
-            trustedKeys->applyList (
-                masterPublic1, blob3, sig3, version));
-
-        BEAST_EXPECT(ListDisposition::invalid ==
-            trustedKeys->applyList (
-                masterPublic1, blob2, sig2, version));
-
-        // applied list is removed due to revoked publisher key
-        auto const signingKeysMax = randomKeyPair(KeyType::secp256k1);
-        auto maxManifest = Manifest::make_Manifest(makeManifestString (
-                masterPublic1, masterSecret1,
-                signingKeysMax.first, signingKeysMax.second,
-                std::numeric_limits<std::uint32_t>::max ()));
-        manifests.applyManifest (std::move (*maxManifest), *trustedKeys);
-
-        for (auto const& val : list1)
-            BEAST_EXPECT(! trustedKeys->listed (val));
-
-        // do not apply list with revoked publisher key
-        auto const sequence4 = 4;
-        auto const blob4 = makeList (list2, sequence4);
-        auto const sig4 = signList (blob4, signingKeysMax);
-
-        BEAST_EXPECT(ListDisposition::untrusted ==
-            trustedKeys->applyList (
-                masterPublic1, blob2, sig2, version));
+                publisherKeys1.first, blob2, sig2, version));
     }
 
     void

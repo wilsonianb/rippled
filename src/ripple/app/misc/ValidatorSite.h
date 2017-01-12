@@ -20,20 +20,12 @@
 #ifndef RIPPLE_APP_MISC_VALIDATORSITE_H_INCLUDED
 #define RIPPLE_APP_MISC_VALIDATORSITE_H_INCLUDED
 
+#include <ripple/app/main/Application.h>
 #include <ripple/app/misc/detail/Work.h>
-#include <ripple/app/misc/Manifest.h>
-#include <ripple/app/misc/ValidatorList.h>
 #include <ripple/basics/Log.h>
 #include <ripple/basics/StringUtilities.h>
-#include <ripple/basics/UnorderedContainers.h>
-#include <ripple/overlay/Overlay.h>
-#include <ripple/protocol/PublicKey.h>
 #include <boost/asio.hpp>
-#include <boost/iterator/counting_iterator.hpp>
-#include <boost/range/adaptors.hpp>
-#include <boost/thread/shared_mutex.hpp>
 #include <mutex>
-#include <numeric>
 
 namespace ripple {
 
@@ -48,10 +40,6 @@ namespace ripple {
     Fetched lists are expected to be in JSON format and contain the following
     fields:
 
-    @li @c "manifest": Base64-encoded serialization of a manifest containing the
-        publisher's master and signing public keys. This has the same format as
-        the @c validation_manifest config section.
-
     @li @c "blob": Base64-encoded JSON string containing a @c "sequence" and
         @c "validators" field. @c "validators" contains an array of objects with
         @c "validation_public_key" and @c "manifest" fields.
@@ -59,6 +47,9 @@ namespace ripple {
 
     @li @c "signature": Hex-encoded signature of the blob using the publisher's
         signing key.
+
+    @li @c "public_key": Hex-encoded publisher public key. Ed25519 public keys
+        are expected to be preceded with 0xed.
 
     @li @c "version": 1
 

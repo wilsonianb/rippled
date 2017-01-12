@@ -181,7 +181,7 @@ ManifestCache::applicable (
     Manifest const& m,
     ValidatorList const& unl) const
 {
-    if (! unl.listed (m.masterKey) && ! unl.trustedPublisher (m.masterKey))
+    if (! unl.listed (m.masterKey))
     {
         /*
             A manifest was received whose master key we don't trust.
@@ -241,9 +241,6 @@ ManifestCache::applyManifest (
     std::lock_guard<std::mutex> readLock{read_mutex_};
 
     bool const revoked = m.revoked();
-
-    if (revoked && unl.trustedPublisher (m.masterKey))
-        unl.removePublisher (m.masterKey);
 
     auto const iter = map_.find (m.masterKey);
 
@@ -323,8 +320,7 @@ ManifestCache::load (
                 continue;
             }
 
-            if (unl.listed(mo->masterKey) ||
-                unl.trustedPublisher(mo->masterKey))
+            if (unl.listed(mo->masterKey))
             {
                 applyManifest (std::move(*mo), unl);
             }
