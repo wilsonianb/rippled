@@ -20,9 +20,10 @@
 #include <beast/core/placeholders.hpp>
 #include <beast/core/detail/base64.hpp>
 #include <beast/http.hpp>
+#include <ripple/app/misc/ValidatorList.h>
+#include <ripple/app/misc/ValidatorSite.h>
 #include <ripple/basics/Slice.h>
 #include <ripple/basics/strHex.h>
-#include <ripple/app/misc/ValidatorSite.h>
 #include <ripple/protocol/digest.h>
 #include <ripple/protocol/HashPrefix.h>
 #include <ripple/protocol/PublicKey.h>
@@ -55,7 +56,6 @@ public:
     http_sync_server(endpoint_type const& ep,
             boost::asio::io_service& ios,
             std::pair<PublicKey, SecretKey> keys,
-            std::string manifest,
             int sequence,
             int version,
             std::vector <PublicKey> validators)
@@ -75,11 +75,10 @@ public:
 
         list_ = "{\"blob\":\"" + blob + "\"";
 
-        auto const sig = signDigest(
-            keys.first, keys.second, sha512Half(makeSlice(data)));
+        auto const sig = sign(keys.first, keys.second, makeSlice(data));
 
         list_ += ",\"signature\":\"" + strHex(sig) + "\"";
-        list_ += ",\"manifest\":\"" + manifest + "\"";
+        list_ += ",\"public_key\":\"" + strHex(keys.first) + "\"";
         list_ += ",\"version\":" + std::to_string(version) + '}';
 
         acceptor_.open(ep.protocol());
@@ -282,29 +281,12 @@ private:
         std::vector<std::string> emptyCfgKeys;
         std::vector<std::string> emptyCfgManifest;
 
-        auto const masterSecret1 = randomSecretKey();
-        auto const masterPublic1 =
-            derivePublicKey(KeyType::ed25519, masterSecret1);
-        auto const signingKeys1 = randomKeyPair(KeyType::secp256k1);
-
-        auto const manifest1 =
-            beast::detail::base64_encode (makeManifestString (
-                masterPublic1, masterSecret1,
-                signingKeys1.first, signingKeys1.second, 1));
-
-        auto const masterSecret2 = randomSecretKey();
-        auto const masterPublic2 =
-            derivePublicKey(KeyType::ed25519, masterSecret2);
-        auto const signingKeys2 = randomKeyPair(KeyType::secp256k1);
-
-        auto const manifest2 =
-            beast::detail::base64_encode (makeManifestString (
-                masterPublic2, masterSecret2,
-                signingKeys2.first, signingKeys2.second, 1));
+        auto const publisherKeys1 = randomKeyPair(KeyType::secp256k1);
+        auto const publisherKeys2 = randomKeyPair(KeyType::ed25519);
 
         std::vector<std::string> cfgKeys({
-            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, masterPublic1),
-            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, masterPublic2)});
+            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, publisherKeys1.first),
+            toBase58(TokenType::TOKEN_ACCOUNT_PUBLIC, publisherKeys2.first)});
 
         BEAST_EXPECT(trustedKeys.load (
             emptyLocalKey, emptyCfgKeys,
@@ -334,15 +316,15 @@ private:
         auto const version = 1;
 
         http_sync_server server1(
-            ep1, ioService, signingKeys1, manifest1,
+            ep1, ioService, publisherKeys1,
             sequence, version, list1);
 
         http_sync_server server2(
-            ep2, ioService, signingKeys2, manifest2,
+            ep2, ioService, publisherKeys2,
             sequence, version, list2);
 
         {
-            // fetch single list
+            // fetch single site
             std::vector<std::string> cfgSites(
             {"http://127.0.0.1:" + std::to_string(port1) + "/validators"});
 
@@ -357,6 +339,7 @@ private:
                 BEAST_EXPECT(trustedKeys.listed (val));
         }
         {
+            // fetch multiple sites
             std::vector<std::string> cfgSites({
             "http://127.0.0.1:" + std::to_string(port1) + "/validators",
             "http://127.0.0.1:" + std::to_string(port2) + "/validators"});
