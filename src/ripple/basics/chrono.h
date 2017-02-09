@@ -57,7 +57,7 @@ public:
 };
 
 std::string to_string(NetClock::time_point tp);
-std::string to_string(std::chrono::system_clock::time_point tp);
+std::string to_string(std::chrono::system_clock::time_point tp, bool precise=false);
 
 /** A clock for measuring elapsed time.
 

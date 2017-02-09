@@ -315,13 +315,13 @@ Logs::format (std::string& output, std::string const& message,
 {
     output.reserve (message.size() + partition.size() + 100);
 
-    output = to_string(std::chrono::system_clock::now());
+    using namespace beast::severities;
+    output = to_string(std::chrono::system_clock::now(), severity == kInfo);
 
     output += " ";
     if (! partition.empty ())
         output += partition + ":";
 
-    using namespace beast::severities;
     switch (severity)
     {
     case kTrace:    output += "TRC "; break;

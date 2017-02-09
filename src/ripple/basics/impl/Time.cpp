@@ -43,7 +43,7 @@ civil_from_days(int z) noexcept
 }
 
 std::string
-to_string(std::chrono::system_clock::time_point tp)
+to_string(std::chrono::system_clock::time_point tp, bool precise)
 {
     const char* months[] =
         {
@@ -51,13 +51,15 @@ to_string(std::chrono::system_clock::time_point tp)
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         };
     using namespace std::chrono;
-    auto s = floor<seconds>(tp.time_since_epoch());
-    auto sd = floor<days>(s);  // number of days
-    s -= sd;  // time of day in seconds
-    auto h = floor<hours>(s);
-    s -= h;
-    auto m = floor<minutes>(s);
-    s -= m;
+    auto ms = floor<milliseconds>(tp.time_since_epoch());
+    auto sd = floor<days>(ms);  // number of days
+    ms -= sd;  // time of day in seconds
+    auto h = floor<hours>(ms);
+    ms -= h;
+    auto m = floor<minutes>(ms);
+    ms -= m;
+    auto s = floor<seconds>(ms);
+    ms -= s;
     int y;
     unsigned mn, d;
     std::tie(y, mn, d) = civil_from_days(static_cast<int>(sd.count()));
@@ -70,6 +72,8 @@ to_string(std::chrono::system_clock::time_point tp)
         << setw(2) << h.count() << ':'
         << setw(2) << m.count() << ':'
         << setw(2) << s.count();
+    if (precise)
+        str << '.' << setw(3) << ms.count();
     return str.str();
 }
 
