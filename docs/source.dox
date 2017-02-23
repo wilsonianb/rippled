@@ -109,7 +109,7 @@ INPUT                  = \
     ../src/test/support/AbstractClient.h \
     ../src/test/support/JSONRPCClient.h \
     ../src/test/support/WSClient.h \
-
+    ../src/ripple/app/tx/impl/InvariantCheck.h \
 
 INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          =
