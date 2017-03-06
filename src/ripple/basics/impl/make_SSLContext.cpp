@@ -201,16 +201,16 @@ disallowRenegotiation (SSL const* ssl, bool isNew)
     return false;
 }
 
-static
-void
-info_handler (SSL const* ssl, int event, int)
-{
-    if ((ssl->s3) && (event & SSL_CB_HANDSHAKE_START))
-    {
-        if (disallowRenegotiation (ssl, SSL_in_before (ssl)))
-            ssl->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
-    }
-}
+// static
+// void
+// info_handler (SSL const* ssl, int event, int)
+// {
+//     if ((ssl->s3) && (event & SSL_CB_HANDSHAKE_START))
+//     {
+//         if (disallowRenegotiation (ssl, SSL_in_before (ssl)))
+//             ssl->s3->flags |= SSL3_FLAGS_NO_RENEGOTIATE_CIPHERS;
+//     }
+// }
 
 static
 std::string
@@ -395,7 +395,7 @@ get_context (std::string cipherList)
         LogicError ("d2i_DHparams returned nullptr.");
 
     SSL_CTX_set_tmp_dh (c->native_handle (), dh);
-    SSL_CTX_set_info_callback (c->native_handle (), info_handler);
+    // SSL_CTX_set_info_callback (c->native_handle (), info_handler);
 
     return c;
 }
