@@ -1647,7 +1647,7 @@ NetworkOPsImp::ServerFeeSummary::operator !=(NetworkOPsImp::ServerFeeSummary con
        em.is_initialized() != b.em.is_initialized())
             return true;
 
-    if(em)
+    if(em && b.em)
     {
         return (em->minFeeLevel != b.em->minFeeLevel ||
                 em->expFeeLevel != b.em->expFeeLevel ||
