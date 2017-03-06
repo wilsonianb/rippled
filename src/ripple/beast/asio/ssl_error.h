@@ -63,15 +63,6 @@ error_message_with_ssl(boost::system::error_code const& ec)
     return error;
 }
 
-/** Returns `true` if the error code is a SSL "short read." */
-inline
-bool
-is_short_read(boost::system::error_code const& ec)
-{
-    return (ec.category() == boost::asio::error::get_ssl_category())
-        && (ERR_GET_REASON(ec.value()) == SSL_R_SHORT_READ);
-}
-
 } // beast
 
 #endif
