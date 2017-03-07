@@ -500,6 +500,7 @@ macro(setup_build_boilerplate)
 
   add_definitions(
     -DOPENSSL_NO_SSL2
+    -DOPENSSL_NO_KRB5
     -DDEPRECATED_IN_MAC_OS_X_VERSION_10_7_AND_LATER
     -DHAVE_USLEEP=1
     -DSOCI_CXX_C11=1
@@ -547,7 +548,8 @@ macro(setup_build_boilerplate)
   if (NOT WIN32)
     add_definitions(-D_FILE_OFFSET_BITS=64)
     append_flags(CMAKE_CXX_FLAGS -frtti -std=c++14 -Wno-invalid-offsetof
-      -DBOOST_COROUTINE_NO_DEPRECATION_WARNING -DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
+      -DBOOST_COROUTINE_NO_DEPRECATION_WARNING -DBOOST_COROUTINES_NO_DEPRECATION_WARNING
+      -DOPENSSL_NO_KRB5)
     add_compile_options(-Wall -Wno-sign-compare -Wno-char-subscripts -Wno-format
       -Wno-unused-local-typedefs -g)
     # There seems to be an issue using generator experssions with multiple values,
