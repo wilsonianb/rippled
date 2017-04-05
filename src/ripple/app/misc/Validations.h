@@ -28,8 +28,6 @@
 
 namespace ripple {
 
-// VFALCO TODO rename and move these type aliases into the Validations interface
-
 // nodes validating and highest node ID validating
 using ValidationSet = hash_map<PublicKey, STValidation::pointer>;
 
@@ -57,8 +55,6 @@ public:
     virtual int getNodesAfter (uint256 const& ledger) = 0;
     virtual int getLoadRatio (bool overLoaded) = 0;
 
-    virtual hash_set<PublicKey> getCurrentPublicKeys () = 0;
-
     // VFALCO TODO make a type alias for this ugly return value!
     virtual LedgerToValidationCounter getCurrentValidations (
         uint256 currentLedger, uint256 previousLedger,
@@ -67,7 +63,7 @@ public:
     /** Return the times of all validations for a particular ledger hash. */
     virtual std::vector<NetClock::time_point> getValidationTimes (
         uint256 const& ledger) = 0;
-
+    virtual hash_set<PublicKey> getCurrentPublicKeys () = 0;
     virtual std::list <STValidation::pointer>
     getCurrentTrustedValidations () = 0;
 

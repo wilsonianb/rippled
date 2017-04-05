@@ -28,6 +28,7 @@
 #include <ripple/basics/Log.h>
 #include <ripple/basics/StringUtilities.h>
 #include <ripple/basics/chrono.h>
+#include <ripple/beast/container/aged_unordered_map.h>
 #include <ripple/core/JobQueue.h>
 #include <ripple/core/TimeKeeper.h>
 #include <memory>
@@ -46,7 +47,9 @@ private:
     Application& app_;
     std::mutex mutable mLock;
 
-    TaggedCache<uint256, ValidationSet> mValidations;
+    static constexpr std::chrono::seconds expireAge = std::chrono::seconds{600};
+    beast::aged_unordered_map<uint256, ValidationSet, Stopwatch::clock_type,
+        beast::uhash<>> mValidations;
     ValidationSet mCurrentValidations;
     std::vector<STValidation::pointer> mStaleValidations;
 
@@ -54,30 +57,24 @@ private:
     beast::Journal j_;
 
 private:
-    std::shared_ptr<ValidationSet> findCreateSet (uint256 const& ledgerHash)
+    ValidationSet * findCreateSet (uint256 const& ledgerHash)
     {
-        auto j = mValidations.fetch (ledgerHash);
-
-        if (!j)
-        {
-            j = std::make_shared<ValidationSet> ();
-            mValidations.canonicalize (ledgerHash, j);
-        }
-
-        return j;
+        return &mValidations[ledgerHash];
     }
 
-    std::shared_ptr<ValidationSet> findSet (uint256 const& ledgerHash)
+    ValidationSet * findSet (uint256 const& ledgerHash)
     {
-        return mValidations.fetch (ledgerHash);
+        auto it = mValidations.find(ledgerHash);
+        if(it != mValidations.end())
+            return &it->second;
+        return nullptr;
     }
 
 public:
     explicit
     ValidationsImp (Application& app)
         : app_ (app)
-        , mValidations ("Validations", 4096, 600, stopwatch(),
-            app.journal("TaggedCache"))
+        , mValidations (stopwatch())
         , mWriting (false)
         , j_ (app.journal ("Validations"))
     {
@@ -114,24 +111,15 @@ private:
         {
             ScopedLockType sl (mLock);
 
-            if (!findCreateSet (hash)->insert (
-                    std::make_pair (*pubKey, val)).second)
+            if (!findCreateSet (hash)->emplace(*pubKey, val).second)
                 return false;
 
-            auto it = mCurrentValidations.find (*pubKey);
+            auto res = mCurrentValidations.emplace(*pubKey,val);
 
-            if (it == mCurrentValidations.end ())
+            // previous validation existed
+            if (!res.second)
             {
-                // No previous validation from this validator
-                mCurrentValidations.emplace (*pubKey, val);
-            }
-            else if (!it->second)
-            {
-                // Previous validation has expired
-                it->second = val;
-            }
-            else
-            {
+                auto it = res.first;
                 auto const oldSeq = (*it->second)[~sfLedgerSequence];
                 auto const newSeq = (*val)[~sfLedgerSequence];
 
@@ -299,15 +287,12 @@ private:
 
         while (it != mCurrentValidations.end ())
         {
-            if (!it->second) // contains no record
-                it = mCurrentValidations.erase (it);
-            else if (! current (it->second))
+            if (! current (it->second))
             {
                 // contains a stale record
                 mStaleValidations.push_back (it->second);
-                it->second.reset ();
-                condWrite ();
                 it = mCurrentValidations.erase (it);
+                condWrite ();
             }
             else
             {
@@ -432,8 +417,7 @@ private:
         ScopedLockType sl (mLock);
         for (auto& it: mCurrentValidations)
         {
-            if (it.second)
-                mStaleValidations.push_back (it.second);
+            mStaleValidations.push_back (it.second);
 
             anyNew = true;
         }
@@ -532,7 +516,7 @@ private:
     void sweep () override
     {
         ScopedLockType sl (mLock);
-        mValidations.sweep ();
+        beast::expire(mValidations, expireAge);
     }
 };
 
