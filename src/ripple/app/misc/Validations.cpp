@@ -70,6 +70,31 @@ private:
         return nullptr;
     }
 
+
+    //! Helper to iterate current validations, potentially clearing out stale ones
+    template <class F>
+    void forEachCurrent(bool checkStale, F && f)
+    {
+        auto it = mCurrentValidations.begin ();
+
+        while (it != mCurrentValidations.end ())
+        {
+            if (checkStale && ! current (it->second))
+            {
+                // contains a stale record
+                mStaleValidations.push_back (it->second);
+                it = mCurrentValidations.erase (it);
+                condWrite ();
+            }
+            else
+            {
+                // contains a live record
+                f(it->first, it->second);
+                ++it;
+            }
+        }
+    }
+
 public:
     explicit
     ValidationsImp (Application& app)
@@ -173,18 +198,6 @@ private:
         return false;
     }
 
-    ValidationSet getValidations (uint256 const& ledger) override
-    {
-        {
-            ScopedLockType sl (mLock);
-            auto set = findSet (ledger);
-
-            if (set)
-                return *set;
-        }
-        return ValidationSet ();
-    }
-
     bool current (STValidation::ref val) override
     {
         // Because this can be called on untrusted, possibly
@@ -200,6 +213,31 @@ private:
             (signTime < (now + VALIDATION_VALID_WALL)) &&
             ((val->getSeenTime() == NetClock::time_point{}) ||
                 (val->getSeenTime() < (now + VALIDATION_VALID_LOCAL)));
+    }
+
+
+    ValidationSet getValidations (uint256 const& ledger) override
+    {
+        {
+            ScopedLockType sl (mLock);
+            auto set = findSet (ledger);
+
+            if (set)
+                return *set;
+        }
+        return ValidationSet ();
+    }
+
+    std::vector<NetClock::time_point>
+    getValidationTimes (uint256 const& hash) override
+    {
+        std::vector <NetClock::time_point> times;
+        ScopedLockType sl (mLock);
+        if (auto j = findSet (hash))
+            for (auto& it : *j)
+                if (it.second->isTrusted())
+                    times.push_back (it.second->getSignTime());
+        return times;
     }
 
     std::size_t
@@ -249,11 +287,12 @@ private:
         // Number of trusted nodes that have moved past this ledger
         int count = 0;
         ScopedLockType sl (mLock);
-        for (auto& it: mCurrentValidations)
+        forEachCurrent(false /*no stale check*/, [&](auto const &, auto const & v)
         {
-            if (it.second->isTrusted () && it.second->isPreviousHash (ledger))
-                ++count;
-        }
+            if(v->isTrusted() && v->isPreviousHash (ledger))
+                count++;
+        });
+
         return count;
     }
 
@@ -262,19 +301,17 @@ private:
         // how many trusted nodes are able to keep up, higher is better
         int goodNodes = overLoaded ? 1 : 0;
         int badNodes = overLoaded ? 0 : 1;
+        ScopedLockType sl (mLock);
+        forEachCurrent(false /* no stale check*/, [&](auto const &, auto const & v)
         {
-            ScopedLockType sl (mLock);
-            for (auto& it: mCurrentValidations)
-            {
-                if (it.second->isTrusted ())
+                 if (v->isTrusted ())
                 {
-                    if (it.second->isFull ())
+                    if (v->isFull ())
                         ++goodNodes;
                     else
                         ++badNodes;
                 }
-            }
-        }
+        });
         return (goodNodes * 100) / (goodNodes + badNodes);
     }
 
@@ -283,27 +320,12 @@ private:
         std::list<STValidation::pointer> ret;
 
         ScopedLockType sl (mLock);
-        auto it = mCurrentValidations.begin ();
 
-        while (it != mCurrentValidations.end ())
+        forEachCurrent(true /* stale check*/, [&](auto const &, auto const & v)
         {
-            if (! current (it->second))
-            {
-                // contains a stale record
-                mStaleValidations.push_back (it->second);
-                it = mCurrentValidations.erase (it);
-                condWrite ();
-            }
-            else
-            {
-                // contains a live record
-                if (it->second->isTrusted ())
-                    ret.push_back (it->second);
-
-                ++it;
-            }
-        }
-
+            if(v->isTrusted())
+                ret.push_back(v);
+        });
         return ret;
     }
 
@@ -312,101 +334,56 @@ private:
         hash_set<PublicKey> ret;
 
         ScopedLockType sl (mLock);
-        auto it = mCurrentValidations.begin ();
-
-        while (it != mCurrentValidations.end ())
+        forEachCurrent(true /* stale check*/, [&](auto const & k, auto const &)
         {
-            if (!it->second) // contains no record
-                it = mCurrentValidations.erase (it);
-            else if (! current (it->second))
-            {
-                // contains a stale record
-                mStaleValidations.push_back (it->second);
-                it->second.reset ();
-                condWrite ();
-                it = mCurrentValidations.erase (it);
-            }
-            else
-            {
-                // contains a live record
-                ret.insert (it->first);
-
-                ++it;
-            }
-        }
+            ret.insert(k);
+        });
 
         return ret;
     }
 
-    LedgerToValidationCounter getCurrentValidations (
+    LedgerToValidationCounter
+    getCurrentValidations(
         uint256 currentLedger,
         uint256 priorLedger,
         LedgerIndex cutoffBefore) override
     {
-        bool valCurrentLedger = currentLedger.isNonZero ();
-        bool valPriorLedger = priorLedger.isNonZero ();
+        bool valCurrentLedger = currentLedger.isNonZero();
+        bool valPriorLedger = priorLedger.isNonZero();
 
         LedgerToValidationCounter ret;
 
-        ScopedLockType sl (mLock);
-        auto it = mCurrentValidations.begin ();
+        ScopedLockType sl(mLock);
 
-        while (it != mCurrentValidations.end ())
-        {
-            if (!it->second) // contains no record
-                it = mCurrentValidations.erase (it);
-            else if (! current (it->second))
-            {
-                // contains a stale record
-                mStaleValidations.push_back (it->second);
-                it->second.reset ();
-                condWrite ();
-                it = mCurrentValidations.erase (it);
-            }
-            else if (! it->second->isTrusted())
-                ++it;
-            else if (! it->second->isFieldPresent (sfLedgerSequence) ||
-                (it->second->getFieldU32 (sfLedgerSequence) >= cutoffBefore))
+        forEachCurrent(true /* stale check*/, [&](auto const&, auto const& v) {
+            if (v->isTrusted() && (! v->isFieldPresent (sfLedgerSequence) ||
+                (v->getFieldU32 (sfLedgerSequence) >= cutoffBefore)))
             {
                 // contains a live record
-                bool countPreferred = valCurrentLedger && (it->second->getLedgerHash () == currentLedger);
+                bool countPreferred =
+                    valCurrentLedger && (v->getLedgerHash() == currentLedger);
 
-                if (!countPreferred && // allow up to one ledger slip in either direction
-                        ((valCurrentLedger && it->second->isPreviousHash (currentLedger)) ||
-                         (valPriorLedger && (it->second->getLedgerHash () == priorLedger))))
+                if (!countPreferred &&  // allow up to one ledger slip in either
+                                        // direction
+                    ((valCurrentLedger && v->isPreviousHash(currentLedger)) ||
+                     (valPriorLedger && (v->getLedgerHash() == priorLedger))))
                 {
                     countPreferred = true;
-                    JLOG (j_.trace()) << "Counting for " << currentLedger << " not " << it->second->getLedgerHash ();
+                    JLOG(j_.trace()) << "Counting for " << currentLedger
+                                     << " not " << v->getLedgerHash();
                 }
 
-                ValidationCounter& p = countPreferred ? ret[currentLedger] : ret[it->second->getLedgerHash ()];
-                ++ (p.first);
-                auto ni = it->second->getNodeID ();
+                ValidationCounter& p = countPreferred ? ret[currentLedger]
+                                                      : ret[v->getLedgerHash()];
+                ++(p.first);
+                auto ni = v->getNodeID();
 
                 if (ni > p.second)
                     p.second = ni;
-
-                ++it;
             }
-            else
-            {
-                ++it;
-            }
-        }
+        });
 
         return ret;
-    }
-
-    std::vector<NetClock::time_point>
-    getValidationTimes (uint256 const& hash) override
-    {
-        std::vector <NetClock::time_point> times;
-        ScopedLockType sl (mLock);
-        if (auto j = findSet (hash))
-            for (auto& it : *j)
-                if (it.second->isTrusted())
-                    times.push_back (it.second->getSignTime());
-        return times;
     }
 
     void flush () override
