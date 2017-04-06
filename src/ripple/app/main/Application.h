@@ -64,7 +64,7 @@ class STLedgerEntry;
 class TimeKeeper;
 class TransactionMaster;
 class TxQ;
-class Validations;
+class RCLValidations;
 class ValidatorList;
 class ValidatorSite;
 class Cluster;
@@ -128,7 +128,7 @@ public:
     virtual ManifestCache&          validatorManifests () = 0;
     virtual ManifestCache&          publisherManifests () = 0;
     virtual Cluster&                cluster () = 0;
-    virtual Validations&            getValidations () = 0;
+    virtual RCLValidations&         getValidations () = 0;
     virtual NodeStore::Database&    getNodeStore () = 0;
     virtual InboundLedgers&         getInboundLedgers () = 0;
     virtual InboundTransactions&    getInboundTransactions () = 0;

@@ -328,7 +328,7 @@ public:
     std::unique_ptr <AmendmentTable> m_amendmentTable;
     std::unique_ptr <LoadFeeTrack> mFeeTrack;
     std::unique_ptr <HashRouter> mHashRouter;
-    std::unique_ptr <Validations> mValidations;
+    RCLValidations mValidations;
     std::unique_ptr <LoadManager> m_loadManager;
     std::unique_ptr <TxQ> txQ_;
     DeadlineTimer m_sweepTimer;
@@ -471,7 +471,7 @@ public:
         , mHashRouter (std::make_unique<HashRouter>(
             stopwatch(), HashRouter::getDefaultHoldTime ()))
 
-        , mValidations (make_Validations (*this))
+        , mValidations (*this)
 
         , m_loadManager (make_LoadManager (*this, *this, logs_->journal("LoadManager")))
 
@@ -670,9 +670,9 @@ public:
         return *mHashRouter;
     }
 
-    Validations& getValidations () override
+    RCLValidations& getValidations () override
     {
-        return *mValidations;
+        return mValidations;
     }
 
     ValidatorList& validators () override
@@ -853,7 +853,7 @@ public:
             m_entropyTimer.cancel ();
         }
 
-        mValidations->flush ();
+        mValidations.flush ();
 
         validatorSites_->stop ();
 
