@@ -105,7 +105,7 @@ struct RCLValidation
 /** Adapts the generic Validations code for use by RCL
 
     Stores both listed and trusted validations.  Listed validations are from
-    nodes which are in a published manifest, but which are not in this node's
+    nodes which are in a published lists, but which are not in this node's
     current trusted list.  Trusted validations are validations received from
     nodes that are in the trusted list (UNL) at the time the validation arrives.
 
@@ -132,8 +132,10 @@ class RCLValidations : public Validations<RCLValidations, RCLValidation>
     now() const;
 
     //! Write stale validations to the DB
+    //! NOTE: doWrite() must be called with mLock *locked*.  The passed
+    //! ScopedLockType& acts as a reminder to future maintainers.
     void
-    doWrite();
+    doWrite(ScopedLockType &);
 
     /** Handle a validation that is now stale.
 

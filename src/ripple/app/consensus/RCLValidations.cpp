@@ -240,24 +240,45 @@ RCLValidations::onStale(RCLValidation&& v)
         return;
 
     writing_ = true;
-    app_.getJobQueue().addJob(
-        jtWRITE, "Validations::doWrite", [this](Job&) { doWrite(); });
+    app_.getJobQueue().addJob(jtWRITE, "Validations::doWrite", [this](Job&) {
+
+        auto event =
+            app_.getJobQueue().getLoadEventAP(jtDISK, "ValidationWrite");
+        ScopedLockType sl(lock_);
+        doWrite(sl);
+    });
 }
 
 void
 RCLValidations::flush()
 {
     JLOG(j_.info()) << "Flushing validations";
-    ScopedLockType sl(lock_);
-
-    Validations::flush();
-
-    while (writing_)
+    bool anyNew = false;
     {
-        ScopedUnlockType sul(lock_);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+        ScopedLockType sl(lock_);
 
+        Validations::flush([&](RCLValidation && v)
+        {
+            staleValidations_.emplace_back(std::move(v.val_));
+            anyNew = true;
+        });
+
+        // If there isn't a write in progress already, then write to the
+        // database synchronously.
+        if (anyNew && !writing_)
+        {
+            writing_ = true;
+            doWrite(sl);
+        }
+
+        // Handle the case where flush() is called while a queuedWrite
+        // is already in progress.
+        while (writing_)
+        {
+            ScopedUnlockType sul(lock_);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
     JLOG(j_.debug()) << "Validations flushed";
 }
 
@@ -268,11 +289,11 @@ RCLValidations::sweep()
     Validations::expire();
 }
 
+// NOTE: doWrite() must be called with mLock *locked*.  The passed
+// ScopedLockType& acts as a reminder to future maintainers.
 void
-RCLValidations::doWrite()
+RCLValidations::doWrite(ScopedLockType & )
 {
-    auto event = app_.getJobQueue().getLoadEventAP(jtDISK, "ValidationWrite");
-
     std::string insVal(
         "INSERT INTO Validations "
         "(InitialSeq, LedgerSeq, LedgerHash,NodePubKey,SignTime,RawData) "
@@ -281,7 +302,6 @@ RCLValidations::doWrite()
     std::string findSeq(
         "SELECT LedgerSeq FROM Ledgers WHERE Ledgerhash=:ledgerHash;");
 
-    ScopedLockType sl(lock_);
     assert(writing_);
 
     while (!staleValidations_.empty())

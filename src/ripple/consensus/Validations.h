@@ -268,13 +268,15 @@ protected:
         return parms_;
     }
 
-    //! Flush all current validations, calling `Derived::onStale` member.
+    //! Flush all current validations into the callback
+    //! @param f Callable with signature (Validation && v)
+    template <class F>
     void
-    flush()
+    flush(F && f)
     {
         for (auto& it : current_)
         {
-            impl().onStale(std::move(it.second));
+            f(std::move(it.second));
         }
         current_.clear();
     }
