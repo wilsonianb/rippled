@@ -34,6 +34,10 @@
 namespace ripple {
 
 /** Timing parameters to control validation staleness and expiration.
+
+    @note These are protocol level parameters that should not be changed without
+          careful consideration.  They are *not* implemented as static constexpr
+          to allow simulation code to test alternate parameter settings.
  */
 struct ValidationParms
 {
@@ -43,7 +47,7 @@ struct ValidationParms
         This is a safety to protect against very old validations and the time
         it takes to adjust the close time accuracy window.
     */
-    std::chrono::seconds VALIDATION_CURRENT_WALL = std::chrono::minutes{5};
+    std::chrono::seconds validationCURRENT_WALL = std::chrono::minutes{5};
 
     /** Duration a validation remains current after first observed.
 
@@ -51,14 +55,14 @@ struct ValidationParms
         first saw it. This provides faster recovery in very rare cases where the
         number of validations produced by the network is lower than normal
     */
-    std::chrono::seconds VALIDATION_CURRENT_LOCAL = std::chrono::minutes{3};
+    std::chrono::seconds validationCURRENT_LOCAL = std::chrono::minutes{3};
 
     /** Duration pre-close in which validations are acceptable.
 
         The number of seconds before a close time that we consider a validation
         acceptable. This protects against extreme clock errors
     */
-    std::chrono::seconds VALIDATION_CURRENT_EARLY = std::chrono::minutes{3};
+    std::chrono::seconds validationCURRENT_EARLY = std::chrono::minutes{3};
 
     /** Duration a set of validations for a given ledger hash remain valid
 
@@ -66,7 +70,7 @@ struct ValidationParms
         hash can expire.  This keeps validations for recent ledgers available
         for a reasonable interval.
     */
-    std::chrono::seconds VALIDATION_SET_EXPIRES = std::chrono::minutes{10};
+    std::chrono::seconds validationSET_EXPIRES = std::chrono::minutes{10};
 };
 
 /** Whether a validation is still current
@@ -92,10 +96,10 @@ isCurrent(
     // that avoids any chance of overflowing or underflowing
     // the signing time.
 
-    return (signTime > (now - p.VALIDATION_CURRENT_EARLY)) &&
-        (signTime < (now + p.VALIDATION_CURRENT_WALL)) &&
+    return (signTime > (now - p.validationCURRENT_EARLY)) &&
+        (signTime < (now + p.validationCURRENT_WALL)) &&
         ((seenTime == NetClock::time_point{}) ||
-         (seenTime < (now + p.VALIDATION_CURRENT_LOCAL)));
+         (seenTime < (now + p.validationCURRENT_LOCAL)));
 }
 
 /** Maintains current and recent ledger validations.
@@ -124,8 +128,8 @@ isCurrent(
         // Ledger ID associated with this validation
         LedgerID ledgerID() const;
 
-        // Optional sequence number of validation's ledger
-        boost::optional<std::size_t> seq() const
+        // Sequence number of validation's ledger (0 means no sequence number)
+        std::uint32_t seq() const
 
         // When the validation was signed
         NetClock::time_point signTime() const;
@@ -143,7 +147,8 @@ isCurrent(
         // arrived
         bool trusted() const;
 
-        // Set the previous validation ledger from this publishing node that this
+        // Set the previous validation ledger from this publishing node that
+   this
         // validation replaced
         void setPreviousLedgerID(LedgerID &);
 
@@ -203,6 +208,9 @@ class Validations
     }
 
 protected:
+    // Prevent deleting the derived class through a base class pointer
+    ~Validations() = default;
+
     /** Iterate current validations.
 
         Iterate current validations, optionally removing any stale validations
@@ -242,23 +250,23 @@ protected:
         }
     }
 
-    /** Return set of validations for a ledger
+    /** Iterate the set of validations associated with a given ledger id
 
-        Returns the set of validations for a ledger.
         @param ledgerID The identifier of the ledger
-        @return A pointer to the set of validations, nullptr if none exist.
+        @param f Callable with signature (NodeKey const &, Validation const &)
     */
-    ValidationMap const*
-    byLedger(LedgerID const& ledgerID)
+    template <class F>
+    void
+    byLedger(LedgerID const& ledgerID, F&& f)
     {
         auto it = byLedger_.find(ledgerID);
         if (it != byLedger_.end())
         {
             // Update set time since it is being used
             byLedger_.touch(it);
-            return &(it->second);
+            for (auto const& keyVal : it->second)
+                f(keyVal.first, keyVal.second);
         }
-        return nullptr;
     }
 
     //! Return the validation timing parameters
@@ -272,7 +280,7 @@ protected:
     //! @param f Callable with signature (Validation && v)
     template <class F>
     void
-    flush(F && f)
+    flush(F&& f)
     {
         for (auto& it : current_)
         {
@@ -323,7 +331,7 @@ public:
         if (!isCurrent(parms_, t, val.signTime(), val.seenTime()))
             return AddOutcome::stale;
 
-        auto const& id = val.ledgerID();
+        LedgerID const& id = val.ledgerID();
 
         if (!byLedger_[id].emplace(key, val).second)
             return AddOutcome::repeat;
@@ -331,15 +339,15 @@ public:
         AddOutcome result = AddOutcome::current;
 
         // Attempt to insert
-        auto ins = current_.emplace(key, val);
+        auto const ins = current_.emplace(key, val);
 
         if (!ins.second)
         {
             // previous validation existed, consider updating
-            auto& oldVal = ins.first->second;
+            Validation& oldVal = ins.first->second;
 
-            auto const oldSeq = oldVal.seq();
-            auto const newSeq = val.seq();
+            std::uint32_t const oldSeq = oldVal.seq();
+            std::uint32_t const newSeq = val.seq();
 
             // Sequence of 0 indicates a missing sequence number
             if (oldSeq && newSeq && oldSeq == newSeq)
@@ -350,13 +358,14 @@ public:
                 // for the revoked signing key
                 if (val.key() != oldVal.key())
                 {
-                    auto set = byLedger_.find(oldVal.ledgerID());
-                    if (set != byLedger_.end())
+                    auto const mapIt = byLedger_.find(oldVal.ledgerID());
+                    if (mapIt != byLedger_.end())
                     {
-                        set->second.erase(key);
+                        ValidationMap& validationMap = mapIt->second;
+                        validationMap.erase(key);
                         // Erase the set if it is now empty
-                        if (set->second.empty())
-                            byLedger_.erase(set);
+                        if (validationMap.empty())
+                            byLedger_.erase(mapIt);
                     }
                 }
             }
@@ -364,7 +373,7 @@ public:
             if (val.signTime() > oldVal.signTime() || val.key() != oldVal.key())
             {
                 // This is either a newer validation or a new signing key
-                auto const oldID = oldVal.ledgerID();
+                LedgerID const oldID = oldVal.ledgerID();
                 // Allow impl to take over oldVal
                 impl().onStale(std::move(oldVal));
                 // Replace old val in the map and set the previous ledger ID
@@ -389,7 +398,7 @@ public:
     void
     expire()
     {
-        beast::expire(byLedger_, parms_.VALIDATION_SET_EXPIRES);
+        beast::expire(byLedger_, parms_.validationSET_EXPIRES);
     }
 
     struct ValidationCounts
@@ -416,20 +425,20 @@ public:
         NetClock::time_point t,
         LedgerID const& currentLedger,
         LedgerID const& priorLedger,
-        std::size_t cutoffBefore,
+        std::uint32_t cutoffBefore,
         beast::Journal& j)
     {
-        bool valCurrentLedger = currentLedger != beast::zero;
-        bool valPriorLedger = priorLedger != beast::zero;
+        bool const valCurrentLedger = currentLedger != beast::zero;
+        bool const valPriorLedger = priorLedger != beast::zero;
 
         hash_map<LedgerID, ValidationCounts> ret;
 
-        current(t, [&](auto const&, auto const& v) {
+        current(t, [&](NodeKey const&, Validation const& v) {
 
             if (!v.trusted())
                 return;
 
-            std::size_t seq = v.seq();
+            std::uint32_t const seq = v.seq();
             if ((seq == 0) || (seq >= cutoffBefore))
             {
                 // contains a live record
@@ -447,11 +456,11 @@ public:
                                     << " not " << v.ledgerID();
                 }
 
-                auto& p =
+                ValidationCounts& p =
                     countPreferred ? ret[currentLedger] : ret[v.ledgerID()];
                 ++(p.count);
 
-                NodeID ni = v.nodeID();
+                NodeID const ni = v.nodeID();
                 if (ni > p.highNode)
                     p.highNode = ni;
             }
@@ -475,7 +484,7 @@ public:
     {
         std::size_t count = 0;
 
-        current(boost::none, [&](auto const&, auto const& v) {
+        current(boost::none, [&](NodeKey const&, Validation const& v) {
             if (v.trusted() && v.isPreviousLedgerID(ledgerID))
                 ++count;
         });
@@ -491,16 +500,12 @@ public:
     numTrustedForLedger(LedgerID const& ledgerID)
     {
         std::size_t count = 0;
-        if (auto map = byLedger(ledgerID))
-        {
-            for (auto const& it : *map)
-            {
-                if (it.second.trusted())
-                    ++count;
-            }
-        }
+        byLedger(ledgerID, [&](NodeKey const&, Validation const& v) {
+            if (v.trusted())
+                ++count;
+        });
         return count;
     }
 };
-}
+}  // namespace ripple
 #endif

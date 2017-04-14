@@ -53,11 +53,11 @@ RCLValidations::now() const
 bool
 RCLValidations::add(STValidation::ref val, std::string const& source)
 {
-    auto const & signer = val->getSignerPublic();
-    auto const & hash = val->getLedgerHash();
+    PublicKey const& signer = val->getSignerPublic();
+    uint256 const& hash = val->getLedgerHash();
 
     // Ensure validation is marked as trusted if signer currently trusted
-    auto pubKey = app_.validators().getTrustedKey(signer);
+    boost::optional<PublicKey> pubKey = app_.validators().getTrustedKey(signer);
     if (!val->isTrusted() && pubKey)
         val->setTrusted();
 
@@ -81,9 +81,9 @@ RCLValidations::add(STValidation::ref val, std::string const& source)
     if (currVal && (val->isTrusted() || pubKey))
     {
         ScopedLockType sl(lock_);
-        auto res = Validations::add(now(), *pubKey, val);
+        Validations::AddOutcome res = Validations::add(now(), *pubKey, val);
 
-        // This is a duplicate validadtion
+        // This is a duplicate validation
         if (res == AddOutcome::repeat)
             return false;
         // This validation replaced a prior one with the same sequence number
@@ -112,7 +112,13 @@ RCLValidations::add(STValidation::ref val, std::string const& source)
         return true;
     }
 
-    // FIXME: This never forwards untrusted validations
+    // FIXME: This never forwards untrusted validations, from @JoelKatz:
+    // The idea was that we would have a certain number of validation slots with
+    // priority going to validators we trusted. Remaining slots might be
+    // allocated to validators that were listed by publishers we trusted but
+    // that we didn't choose to trust. The shorter term plan was just to forward
+    // untrusted validations if peers wanted them or if we had the
+    // ability/bandwidth to. None of that was implemented.
     return false;
 }
 
@@ -129,12 +135,11 @@ RCLValidations::getTrustedForLedger(uint256 const& ledger)
     std::vector<STValidation::pointer> res;
     {
         ScopedLockType sl(lock_);
-        if (auto map = byLedger(ledger))
-        {
-            for (auto const& it : *map)
-                if (it.second.trusted())
-                    res.emplace_back(it.second.val_);
-        }
+        Validations::byLedger(
+            ledger, [&](PublicKey const&, RCLValidation const& v) {
+                if (v.trusted())
+                    res.emplace_back(v.val_);
+            });
     }
     return res;
 }
@@ -145,12 +150,11 @@ RCLValidations::getValidationTimes(uint256 const& ledger)
     std::vector<NetClock::time_point> times;
     {
         ScopedLockType sl(lock_);
-        if (auto map = byLedger(ledger))
-        {
-            for (auto const& it : *map)
-                if (it.second.trusted())
-                    times.emplace_back(it.second.val_->getSignTime());
-        }
+        Validations::byLedger(
+            ledger, [&](PublicKey const&, RCLValidation const& v) {
+                if (v.trusted())
+                    times.emplace_back(v.signTime());
+            });
     }
     return times;
 }
@@ -169,20 +173,17 @@ RCLValidations::fees(uint256 const& ledger, std::uint64_t base)
     {
         ScopedLockType sl(lock_);
 
-        if (auto map = byLedger(ledger))
-        {
-            for (auto const& it : *map)
-            {
-                if (it.second.trusted())
+        Validations::byLedger(
+            ledger, [&](PublicKey const&, RCLValidation const& v) {
+                if (v.trusted())
                 {
-                    auto const& val = it.second.val_;
+                    STValidation::pointer const& val = v.val_;
                     if (val->isFieldPresent(sfLoadFee))
                         result.push_back(val->getFieldU32(sfLoadFee));
                     else
                         result.push_back(base);
                 }
-            }
-        }
+            });
     }
 
     return result;
@@ -202,7 +203,7 @@ RCLValidations::currentTrusted()
 
     ScopedLockType sl(lock_);
 
-    current(now(), [&](auto const&, auto const& v) {
+    Validations::current(now(), [&](PublicKey const&, RCLValidation const& v) {
         if (v.trusted())
             ret.push_back(v.val_);
     });
@@ -215,15 +216,16 @@ RCLValidations::getCurrentPublicKeys()
     hash_set<PublicKey> ret;
 
     ScopedLockType sl(lock_);
-    current(now(), [&](auto const& k, auto const&) { ret.insert(k); });
+    Validations::current(
+        now(), [&](PublicKey const& k, RCLValidation const&) { ret.insert(k); });
 
     return ret;
 }
 
 auto
 RCLValidations::currentTrustedDistribution(
-    uint256 currentLedger,
-    uint256 priorLedger,
+    uint256 const& currentLedger,
+    uint256 const& priorLedger,
     LedgerIndex cutoffBefore) -> hash_map<uint256, ValidationCounts>
 {
     ScopedLockType sl(lock_);
@@ -257,8 +259,7 @@ RCLValidations::flush()
     {
         ScopedLockType sl(lock_);
 
-        Validations::flush([&](RCLValidation && v)
-        {
+        Validations::flush([&](RCLValidation&& v) {
             staleValidations_.emplace_back(std::move(v.val_));
             anyNew = true;
         });
@@ -292,7 +293,7 @@ RCLValidations::sweep()
 // NOTE: doWrite() must be called with mLock *locked*.  The passed
 // ScopedLockType& acts as a reminder to future maintainers.
 void
-RCLValidations::doWrite(ScopedLockType & )
+RCLValidations::doWrite(ScopedLockType&)
 {
     std::string insVal(
         "INSERT INTO Validations "
@@ -354,4 +355,4 @@ RCLValidations::doWrite(ScopedLockType & )
     writing_ = false;
 }
 
-}  // ripple
+}  // namespace ripple

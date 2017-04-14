@@ -110,7 +110,9 @@ struct RCLValidation
     nodes that are in the trusted list (UNL) at the time the validation arrives.
 
     Implements the CRTP type requirements of Validations by saving
-    stale validations to the sqlite DB.
+    stale validations to the sqlite DB.  The generic Validations class does
+    not internally lock to manage concurrent access, so this class acquires the
+    lock before all calls to the base class.
 
 */
 class RCLValidations : public Validations<RCLValidations, RCLValidation>
@@ -137,9 +139,13 @@ class RCLValidations : public Validations<RCLValidations, RCLValidation>
     void
     doWrite(ScopedLockType &);
 
-    /** Handle a validation that is now stale.
+    /** Callback to handle a validation that is now stale.
 
         @param v The newly stale validation
+
+        @note onStale is only called by the CRTP base Validations class.  Since
+              the lock_ must be acquired prior to all calls of that class, it
+              remains locked for any calls of onStale.
     */
     void
     onStale(RCLValidation&& v);
@@ -206,8 +212,8 @@ public:
     //! @ref Validations::currentTrustedDistribution
     hash_map<uint256, ValidationCounts>
     currentTrustedDistribution(
-        uint256 currentLedger,
-        uint256 previousLedger,
+        uint256 const & currentLedger,
+        uint256 const & previousLedger,
         LedgerIndex cutoffBefore);
 
     /** @return set of public keys for current listed or trusted validations

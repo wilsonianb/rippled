@@ -37,7 +37,7 @@ class Validations_test : public beast::unit_test::suite
     // Represents a ledger sequence number
     struct Seq
     {
-        explicit Seq(std::size_t sIn) : s{sIn}
+        explicit Seq(std::uint32_t sIn) : s{sIn}
         {
         }
 
@@ -45,18 +45,18 @@ class Validations_test : public beast::unit_test::suite
         {
         }
 
-        operator std::size_t() const
+        operator std::uint32_t() const
         {
             return s;
         }
 
-        std::size_t s;
+        std::uint32_t s;
     };
 
     // Represents a unique ledger identifier
     struct ID
     {
-        explicit ID(std::size_t idIn) : id{idIn}
+        explicit ID(std::uint32_t idIn) : id{idIn}
         {
         }
 
@@ -83,7 +83,7 @@ class Validations_test : public beast::unit_test::suite
             hash_append(h, id.id);
         }
 
-        std::size_t id;
+        std::uint32_t id;
     };
 
     class Node;
@@ -134,7 +134,7 @@ class Validations_test : public beast::unit_test::suite
             return key_;
         }
 
-        std::size_t
+        std::uint32_t
         nodeID() const
         {
             return nodeID_;
@@ -147,13 +147,13 @@ class Validations_test : public beast::unit_test::suite
         }
 
         void
-        setPreviousLedgerID(std::size_t const& prevID)
+        setPreviousLedgerID(std::uint32_t const& prevID)
         {
             prevID_ = prevID;
         }
 
         bool
-        isPreviousLedgerID(std::size_t const& prevID) const
+        isPreviousLedgerID(std::uint32_t const& prevID) const
         {
             return prevID_ == prevID;
         }
@@ -169,7 +169,7 @@ class Validations_test : public beast::unit_test::suite
         std::size_t signIdx_ = 0;
 
     public:
-        Node(std::size_t nodeID, clock_type const& c) : c_(c), nodeID_(nodeID)
+        Node(std::uint32_t nodeID, clock_type const& c) : c_(c), nodeID_(nodeID)
         {
         }
 
@@ -294,14 +294,17 @@ class Validations_test : public beast::unit_test::suite
         current(NetClock::time_point now, F&& f)
         {
             return Validations::current(
-                now, [&](auto const& , auto const& v) { return f(v); });
+                now, [&](auto const& , Validation const& v) { return f(v); });
         }
 
-        // Helper to return the set of ledgers indexed by ledger ID
-        auto
-        by(ID id)
+        // Return whether any validations are currently stored for the ledger
+        bool
+        exists(ID id)
         {
-            return Validations::byLedger(id);
+            bool res = false;
+            Validations::byLedger(
+                id, [&](auto const& key, Validation const& val) { res = true; });
+            return res;
         }
     };
 
@@ -322,7 +325,7 @@ class Validations_test : public beast::unit_test::suite
 
         {
             {
-                auto v = a.validation(Seq{1}, ID{1});
+                auto const v = a.validation(Seq{1}, ID{1});
 
                 // Add a current validation
                 BEAST_EXPECT(AddOutcome::current == vals.add(a, v));
@@ -347,25 +350,25 @@ class Validations_test : public beast::unit_test::suite
                 // Test the node changing signing key, then reissuing a ledger
 
                 // Confirm old ledger on hand, but not new ledger
-                BEAST_EXPECT(vals.by(ID{2}));
-                BEAST_EXPECT(!vals.by(ID{20}));
+                BEAST_EXPECT(vals.exists(ID{2}));
+                BEAST_EXPECT(!vals.exists(ID{20}));
 
                 a.advanceKey();
 
                 // A new id is needed since the signing key changed
                 BEAST_EXPECT(AddOutcome::sameSeq == vals.add(a, Seq{2}, ID{20}));
 
-                BEAST_EXPECT(!vals.by(ID{2}));
-                BEAST_EXPECT(vals.by(ID{20}));
+                BEAST_EXPECT(!vals.exists(ID{2}));
+                BEAST_EXPECT(vals.exists(ID{20}));
             }
 
             {
                 // Processing validations out of order should ignore the older
                 clock.advance(2s);
-                auto val3 = a.validation(Seq{3}, ID{3});
+                auto const val3 = a.validation(Seq{3}, ID{3});
 
                 clock.advance(4s);
-                auto val4 = a.validation(Seq{4}, ID{4});
+                auto const val4 = a.validation(Seq{4}, ID{4});
 
                 BEAST_EXPECT(AddOutcome::current == vals.add(a, val4));
 
@@ -378,15 +381,15 @@ class Validations_test : public beast::unit_test::suite
 
                 BEAST_EXPECT(
                     AddOutcome::stale ==
-                    vals.add(a, Seq{5}, ID{5}, -p.VALIDATION_CURRENT_EARLY, 0s));
+                    vals.add(a, Seq{5}, ID{5}, -p.validationCURRENT_EARLY, 0s));
 
                 BEAST_EXPECT(
                     AddOutcome::stale ==
-                    vals.add(a, Seq{5}, ID{5}, p.VALIDATION_CURRENT_WALL, 0s));
+                    vals.add(a, Seq{5}, ID{5}, p.validationCURRENT_WALL, 0s));
 
                 BEAST_EXPECT(
                     AddOutcome::stale ==
-                    vals.add(a, Seq{5}, ID{5}, 0s, p.VALIDATION_CURRENT_LOCAL));
+                    vals.add(a, Seq{5}, ID{5}, 0s, p.validationCURRENT_LOCAL));
             }
         }
     }
@@ -407,7 +410,7 @@ class Validations_test : public beast::unit_test::suite
 
         BEAST_EXPECT(vals.stale.empty());
 
-        clock.advance(p.VALIDATION_CURRENT_LOCAL);
+        clock.advance(p.validationCURRENT_LOCAL);
 
         // trigger iteration over current
         vals.current(a.now(), [](auto const&) {});
@@ -429,10 +432,10 @@ class Validations_test : public beast::unit_test::suite
         Node a{0, clock};
 
         BEAST_EXPECT(AddOutcome::current == vals.add(a, Seq{1}, ID{1}));
-        BEAST_EXPECT(vals.by(ID{1}));
-        clock.advance(p.VALIDATION_SET_EXPIRES);
+        BEAST_EXPECT(vals.exists(ID{1}));
+        clock.advance(p.validationSET_EXPIRES);
         vals.expire();
-        BEAST_EXPECT(!vals.by(ID{1}));
+        BEAST_EXPECT(!vals.exists(ID{1}));
     }
 
     void
