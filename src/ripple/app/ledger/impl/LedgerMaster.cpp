@@ -200,7 +200,7 @@ LedgerMaster::setValidLedger(
 
     if (! standalone_)
     {
-        times = app_.getValidations().getValidationTimes(
+        times = app_.getValidations().getTrustedValidationTimes(
             l->info().hash);
     }
 

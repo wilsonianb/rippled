@@ -64,7 +64,7 @@ class STLedgerEntry;
 class TimeKeeper;
 class TransactionMaster;
 class TxQ;
-class RCLValidations;
+
 class ValidatorList;
 class ValidatorSite;
 class Cluster;
@@ -73,6 +73,13 @@ class DatabaseCon;
 class SHAMapStore;
 
 using NodeCache     = TaggedCache <SHAMapHash, Blob>;
+
+template <class StalePolicy, class Validation, class MutexType>
+class Validations;
+class RCLValidation;
+class RCLValidationsPolicy;
+using RCLValidations =
+    Validations<RCLValidationsPolicy, RCLValidation, std::mutex>;
 
 class Application : public beast::PropertyStream::Source
 {

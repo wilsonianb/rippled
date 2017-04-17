@@ -2103,7 +2103,7 @@ bool NetworkOPsImp::recvValidation (
     JLOG(m_journal.debug()) << "recvValidation " << val->getLedgerHash ()
                           << " from " << source;
     pubValidation (val);
-    return app_.getValidations ().add (val, source);
+    return handleNewValidation(app_, val, source);
 }
 
 Json::Value NetworkOPsImp::getConsensusInfo ()

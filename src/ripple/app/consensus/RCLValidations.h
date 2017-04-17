@@ -32,11 +32,14 @@ class Application;
 
 /** Wrapper over STValidation for generic Validation code
 
-    Wraps an STValidation::pointer for compatiblity with the generic validation
+    Wraps an STValidation::pointer for compatibility with the generic validation
     code.
 */
-struct RCLValidation
+class RCLValidation
 {
+    STValidation::pointer val_;
+public:
+
     /** Constructor
 
         @param v The validation to wrap.
@@ -45,195 +48,160 @@ struct RCLValidation
     {
     }
 
+    /// Validated ledger's hash
     uint256
     ledgerID() const
     {
         return val_->getLedgerHash();
     }
 
+    /// Validated ledger's sequence number (0 if none)
     std::size_t
     seq() const
     {
         return val_->getFieldU32(sfLedgerSequence);
     }
 
+    /// Validation ledger's signing time
     NetClock::time_point
     signTime() const
     {
         return val_->getSignTime();
     }
 
+    /// Validated ledger's first seen time
     NetClock::time_point
     seenTime() const
     {
         return val_->getSeenTime();
     }
 
+    /// Public key of validator that published the validation
     PublicKey
     key() const
     {
         return val_->getSignerPublic();
     }
 
+    /// NodeID of validator that published the validation
     NodeID
     nodeID() const
     {
         return val_->getNodeID();
     }
 
+    /// Whether the validation is considered trusted.
     bool
     trusted() const
     {
         return val_->isTrusted();
     }
 
+    /// Set the prior ledger hash this validation is replacing
     void
     setPreviousLedgerID(uint256 const& hash)
     {
         val_->setPreviousHash(hash);
     }
 
+    /// Check whether the given hash matches this validaiton's prior hash
     bool
     isPreviousLedgerID(uint256 const& hash) const
     {
         return val_->isPreviousHash(hash);
     }
 
-    STValidation::pointer val_;
+    /// Get the load fee of the validation of it exists
+    boost::optional<std::uint64_t>
+    loadFee() const
+    {
+        if (val_->isFieldPresent(sfLoadFee))
+            return val_->getFieldU32(sfLoadFee);
+        return boost::none;
+    }
+
+    /// Extract the underlying STValidation being wrapepd
+    STValidation::pointer
+    unwrap() const
+    {
+        return val_;
+    }
+
 };
 
-/** Adapts the generic Validations code for use by RCL
+/** Implements the StalePolicy policy class for adapating Validations in the RCL
 
-    Stores both listed and trusted validations.  Listed validations are from
-    nodes which are in a published lists, but which are not in this node's
-    current trusted list.  Trusted validations are validations received from
-    nodes that are in the trusted list (UNL) at the time the validation arrives.
-
-    Implements the CRTP type requirements of Validations by saving
-    stale validations to the sqlite DB.  The generic Validations class does
-    not internally lock to manage concurrent access, so this class acquires the
-    lock before all calls to the base class.
-
+    Manages storing and writing stale RCLValidations to the sqlite DB.
 */
-class RCLValidations : public Validations<RCLValidations, RCLValidation>
+class RCLValidationsPolicy
 {
-    friend class Validations<RCLValidations, RCLValidation>;
-
     using LockType = std::mutex;
     using ScopedLockType = std::lock_guard<LockType>;
     using ScopedUnlockType = GenericScopedUnlock<LockType>;
 
     Application& app_;
-    std::mutex mutable lock_;
-    std::vector<STValidation::pointer> staleValidations_;
-    bool writing_ = false;
 
-    beast::Journal j_;
+    // Lock for managing staleValidations_ and writing_
+    std::mutex staleLock_;
+    std::vector<RCLValidation> staleValidations_;
+    bool staleWriting_ = false;
 
+    // Write the stale validations to sqlite DB, the scoped lock argument
+    // is used to remind callers that the staleLock_ must be *locked* prior
+    // to making the call
+    void
+    doStaleWrite(ScopedLockType&);
+
+public:
+
+    RCLValidationsPolicy(Application & app);
+
+    /** Current time used to determine if validations are stale.
+    */
     NetClock::time_point
     now() const;
 
-    //! Write stale validations to the DB
-    //! NOTE: doWrite() must be called with mLock *locked*.  The passed
-    //! ScopedLockType& acts as a reminder to future maintainers.
-    void
-    doWrite(ScopedLockType &);
-
-    /** Callback to handle a validation that is now stale.
+    /** Handle a newly stale validation.
 
         @param v The newly stale validation
 
-        @note onStale is only called by the CRTP base Validations class.  Since
-              the lock_ must be acquired prior to all calls of that class, it
-              remains locked for any calls of onStale.
+        @warning This should do minimal work, as it is expected to be called
+                 by the generic Validations code while it may be holding an
+                 internal lock
     */
     void
     onStale(RCLValidation&& v);
 
-public:
-    /** Constructor
+     /** Flush current validations to disk before shutdown.
 
-        @param app Application object
-    */
-    RCLValidations(Application& app);
-
-    /** Attempt to add a validation
-
-        Attempt to add a validation
-        @param val The validation to add
-        @param source Name associated with validation used in logging
-
-        @return Whether the validation should be relayed
-    */
-    bool
-    add(STValidation::ref val, std::string const& source);
-
-    /** @return Whether the given validation is current
-     */
-    bool isCurrent(STValidation::ref val);
-
-    /**  Get set of trusted validationss associated with a given ledger
-
-         @param ledger Ledger hash of interest
-         @return Trusted validations associated with ledger
-    */
-    std::vector<STValidation::pointer>
-    getTrustedForLedger(uint256 const& ledger);
-
-    /** Get number of trusted validations associated with a given ledger
-
-        @param ledger Ledger hash of interest
-        @return Number of trusted validations associated with ledger
-    */
-    std::size_t
-    numTrustedForLedger(uint256 const& ledger);
-
-    /** Returns fees reported by trusted validators in the given ledger
-
-        @param ledger Ledger hash of interest
-        @param base The fee to report if not present in the validation
-        @return Vector of fees
-    */
-    std::vector<std::uint64_t>
-    fees(uint256 const& ledger, std::uint64_t base);
-
-    /** Return the times of all validations for a particular ledger hash.
-
-        @param ledger Ledger has of interest
-        @return Vector of times
-    */
-    std::vector<NetClock::time_point>
-    getValidationTimes(uint256 const& ledger);
-
-    //! @ref Validations::getNodesAfter
-    std::size_t
-    getNodesAfter(uint256 const& ledger);
-
-    //! @ref Validations::currentTrustedDistribution
-    hash_map<uint256, ValidationCounts>
-    currentTrustedDistribution(
-        uint256 const & currentLedger,
-        uint256 const & previousLedger,
-        LedgerIndex cutoffBefore);
-
-    /** @return set of public keys for current listed or trusted validations
-     */
-    hash_set<PublicKey>
-    getCurrentPublicKeys();
-
-    /** @return list of current trusted validations */
-    std::vector<STValidation::pointer>
-    currentTrusted();
-
-    /** Flush all current validations */
+         @param remaining The remaining validations to flush
+      */
     void
-    flush();
-
-    /** Sweep expired validation sets */
-    void
-    sweep();
+    flush(hash_map<PublicKey, RCLValidation> && remaining);
 };
 
-}  // ripple
+
+/// Alias for RCL-specific instantiation of generic Validations
+using RCLValidations =
+    Validations<RCLValidationsPolicy, RCLValidation, std::mutex>;
+
+/** Handle a new validation
+
+    1. Set the trust status of a validation based on the validating node's
+       public key and this node's current UNL.
+    2. Add the validation to the set of validations if current.
+    3. If new and trusted, send the validation to the ledgerMaster.
+
+    @param app Application object containing validations and ledgerMesger
+    @param val The validation to add
+    @param source Name associated with validation used in logging
+
+    @return Whether the validation should be relayed
+*/
+bool
+handleNewValidation(Application & app, STValidation::ref val, std::string const& source);
+
+
+}  // namespace ripple
 
 #endif

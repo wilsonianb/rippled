@@ -877,7 +877,7 @@ RCLConsensus::validate(
     v->setTrusted ();
     // suppress it if we receive it - FIXME: wrong suppression
     app_.getHashRouter ().addSuppression (signingHash);
-    app_.getValidations ().add (v, "local");
+    handleNewValidation(app_, v, "local");
     Blob validation = v->getSerialized ();
     protocol::TMValidation val;
     val.set_validation (&validation[0], validation.size ());

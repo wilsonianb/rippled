@@ -150,7 +150,7 @@ void
 FeeVoteImpl::doVoting(
     std::shared_ptr<ReadView const> const& lastClosedLedger,
     std::vector<STValidation::pointer> const& set,
-            std::shared_ptr<SHAMap> const& initialPosition)
+    std::shared_ptr<SHAMap> const& initialPosition)
 {
     // LCL must be flag ledger
     assert ((lastClosedLedger->info().seq % 256) == 0);

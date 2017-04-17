@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012, 2013 Ripple Labs Inc.
+    Copyright (c) 2012-2017 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -36,264 +36,74 @@
 
 namespace ripple {
 
-RCLValidations::RCLValidations(Application& app)
-    : Validations{ValidationParms{}, stopwatch()}
-    , app_(app)
-    , j_(app.journal("Validations"))
+RCLValidationsPolicy::RCLValidationsPolicy(Application& app) : app_(app)
 {
     staleValidations_.reserve(512);
 }
 
 NetClock::time_point
-RCLValidations::now() const
+RCLValidationsPolicy::now() const
 {
     return app_.timeKeeper().closeTime();
 }
 
-bool
-RCLValidations::add(STValidation::ref val, std::string const& source)
-{
-    PublicKey const& signer = val->getSignerPublic();
-    uint256 const& hash = val->getLedgerHash();
-
-    // Ensure validation is marked as trusted if signer currently trusted
-    boost::optional<PublicKey> pubKey = app_.validators().getTrustedKey(signer);
-    if (!val->isTrusted() && pubKey)
-        val->setTrusted();
-
-    if (!val->isTrusted())
-    {
-        JLOG(j_.trace()) << "Node "
-                         << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                         << " not in UNL st="
-                         << val->getSignTime().time_since_epoch().count()
-                         << ", hash=" << hash
-                         << ", shash=" << val->getSigningHash()
-                         << " src=" << source;
-    }
-
-    // If not currently trusted, see if signer is currently listed
-    if (!pubKey)
-        pubKey = app_.validators().getListedKey(signer);
-
-    bool currVal = isCurrent(val);
-    // only add trusted or listed
-    if (currVal && (val->isTrusted() || pubKey))
-    {
-        ScopedLockType sl(lock_);
-        Validations::AddOutcome res = Validations::add(now(), *pubKey, val);
-
-        // This is a duplicate validation
-        if (res == AddOutcome::repeat)
-            return false;
-        // This validation replaced a prior one with the same sequence number
-        if (res == AddOutcome::sameSeq)
-        {
-            auto const seq = val->getFieldU32(sfLedgerSequence);
-            JLOG(j_.warn())
-                << "Trusted node "
-                << toBase58(TokenType::TOKEN_NODE_PUBLIC, *pubKey)
-                << " published multiple validations for ledger " << seq;
-        }
-
-        currVal = res == AddOutcome::current;
-    }
-
-    JLOG(j_.debug()) << "Val for " << hash << " from "
-                     << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                     << " added "
-                     << (val->isTrusted() ? "trusted/" : "UNtrusted/")
-                     << (currVal ? "current" : "stale");
-
-    if (val->isTrusted() && currVal)
-    {
-        app_.getLedgerMaster().checkAccept(
-            hash, val->getFieldU32(sfLedgerSequence));
-        return true;
-    }
-
-    // FIXME: This never forwards untrusted validations, from @JoelKatz:
-    // The idea was that we would have a certain number of validation slots with
-    // priority going to validators we trusted. Remaining slots might be
-    // allocated to validators that were listed by publishers we trusted but
-    // that we didn't choose to trust. The shorter term plan was just to forward
-    // untrusted validations if peers wanted them or if we had the
-    // ability/bandwidth to. None of that was implemented.
-    return false;
-}
-
-bool
-RCLValidations::isCurrent(STValidation::ref val)
-{
-    using ripple::isCurrent;
-    return isCurrent(parms(), now(), val->getSignTime(), val->getSeenTime());
-}
-
-std::vector<STValidation::pointer>
-RCLValidations::getTrustedForLedger(uint256 const& ledger)
-{
-    std::vector<STValidation::pointer> res;
-    {
-        ScopedLockType sl(lock_);
-        Validations::byLedger(
-            ledger, [&](PublicKey const&, RCLValidation const& v) {
-                if (v.trusted())
-                    res.emplace_back(v.val_);
-            });
-    }
-    return res;
-}
-
-std::vector<NetClock::time_point>
-RCLValidations::getValidationTimes(uint256 const& ledger)
-{
-    std::vector<NetClock::time_point> times;
-    {
-        ScopedLockType sl(lock_);
-        Validations::byLedger(
-            ledger, [&](PublicKey const&, RCLValidation const& v) {
-                if (v.trusted())
-                    times.emplace_back(v.signTime());
-            });
-    }
-    return times;
-}
-
-std::size_t
-RCLValidations::numTrustedForLedger(uint256 const& ledger)
-{
-    ScopedLockType sl(lock_);
-    return Validations::numTrustedForLedger(ledger);
-}
-
-std::vector<std::uint64_t>
-RCLValidations::fees(uint256 const& ledger, std::uint64_t base)
-{
-    std::vector<std::uint64_t> result;
-    {
-        ScopedLockType sl(lock_);
-
-        Validations::byLedger(
-            ledger, [&](PublicKey const&, RCLValidation const& v) {
-                if (v.trusted())
-                {
-                    STValidation::pointer const& val = v.val_;
-                    if (val->isFieldPresent(sfLoadFee))
-                        result.push_back(val->getFieldU32(sfLoadFee));
-                    else
-                        result.push_back(base);
-                }
-            });
-    }
-
-    return result;
-}
-
-std::size_t
-RCLValidations::getNodesAfter(uint256 const& ledger)
-{
-    ScopedLockType sl(lock_);
-    return Validations::getNodesAfter(ledger);
-}
-
-std::vector<STValidation::pointer>
-RCLValidations::currentTrusted()
-{
-    std::vector<STValidation::pointer> ret;
-
-    ScopedLockType sl(lock_);
-
-    Validations::current(now(), [&](PublicKey const&, RCLValidation const& v) {
-        if (v.trusted())
-            ret.push_back(v.val_);
-    });
-    return ret;
-}
-
-hash_set<PublicKey>
-RCLValidations::getCurrentPublicKeys()
-{
-    hash_set<PublicKey> ret;
-
-    ScopedLockType sl(lock_);
-    Validations::current(
-        now(), [&](PublicKey const& k, RCLValidation const&) { ret.insert(k); });
-
-    return ret;
-}
-
-auto
-RCLValidations::currentTrustedDistribution(
-    uint256 const& currentLedger,
-    uint256 const& priorLedger,
-    LedgerIndex cutoffBefore) -> hash_map<uint256, ValidationCounts>
-{
-    ScopedLockType sl(lock_);
-
-    return Validations::currentTrustedDistribution(
-        now(), currentLedger, priorLedger, cutoffBefore, j_);
-}
-
 void
-RCLValidations::onStale(RCLValidation&& v)
+RCLValidationsPolicy::onStale(RCLValidation&& v)
 {
-    staleValidations_.emplace_back(std::move(v.val_));
-    if (writing_)
+    // Store the newly stale validation; do not do significant work in this
+    // function since this is a callback from Validations, which may be
+    // doing other work.
+
+    ScopedLockType sl(staleLock_);
+    staleValidations_.emplace_back(std::move(v));
+    if (staleWriting_)
         return;
 
-    writing_ = true;
-    app_.getJobQueue().addJob(jtWRITE, "Validations::doWrite", [this](Job&) {
-
-        auto event =
-            app_.getJobQueue().getLoadEventAP(jtDISK, "ValidationWrite");
-        ScopedLockType sl(lock_);
-        doWrite(sl);
-    });
+    staleWriting_ = true;
+    app_.getJobQueue().addJob(
+        jtWRITE, "Validations::doStaleWrite", [this](Job&) {
+            auto event =
+                app_.getJobQueue().getLoadEventAP(jtDISK, "ValidationWrite");
+            ScopedLockType sl(staleLock_);
+            doStaleWrite(sl);
+        });
 }
 
 void
-RCLValidations::flush()
+RCLValidationsPolicy::flush(hash_map<PublicKey, RCLValidation>&& remaining)
 {
-    JLOG(j_.info()) << "Flushing validations";
     bool anyNew = false;
     {
-        ScopedLockType sl(lock_);
+        ScopedLockType sl(staleLock_);
 
-        Validations::flush([&](RCLValidation&& v) {
-            staleValidations_.emplace_back(std::move(v.val_));
-            anyNew = true;
-        });
-
-        // If there isn't a write in progress already, then write to the
-        // database synchronously.
-        if (anyNew && !writing_)
+        for (auto const& keyVal : remaining)
         {
-            writing_ = true;
-            doWrite(sl);
+            staleValidations_.emplace_back(std::move(keyVal.second));
+            anyNew = true;
+        }
+
+        // If we have new validations to write and there isn't a write in
+        // progress already, then write to the database synchronously.
+        if (anyNew && !staleWriting_)
+        {
+            staleWriting_ = true;
+            doStaleWrite(sl);
         }
 
         // Handle the case where flush() is called while a queuedWrite
         // is already in progress.
-        while (writing_)
+        while (staleWriting_)
         {
-            ScopedUnlockType sul(lock_);
+            ScopedUnlockType sul(staleLock_);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-    JLOG(j_.debug()) << "Validations flushed";
 }
 
-void
-RCLValidations::sweep()
-{
-    ScopedLockType sl(lock_);
-    Validations::expire();
-}
-
-// NOTE: doWrite() must be called with mLock *locked*.  The passed
+// NOTE: doStaleWrite() must be called with mLock *locked*.  The passed
 // ScopedLockType& acts as a reminder to future maintainers.
 void
-RCLValidations::doWrite(ScopedLockType&)
+RCLValidationsPolicy::doStaleWrite(ScopedLockType&)
 {
     std::string insVal(
         "INSERT INTO Validations "
@@ -303,27 +113,27 @@ RCLValidations::doWrite(ScopedLockType&)
     std::string findSeq(
         "SELECT LedgerSeq FROM Ledgers WHERE Ledgerhash=:ledgerHash;");
 
-    assert(writing_);
+    assert(staleWriting_);
 
     while (!staleValidations_.empty())
     {
-        std::vector<STValidation::pointer> vector;
-        vector.reserve(512);
-        staleValidations_.swap(vector);
+        std::vector<RCLValidation> currentStale;
+        currentStale.reserve(512);
+        staleValidations_.swap(currentStale);
 
         {
-            ScopedUnlockType sul(lock_);
+            ScopedUnlockType sul(staleLock_);
             {
                 auto db = app_.getLedgerDB().checkoutDb();
 
                 Serializer s(1024);
                 soci::transaction tr(*db);
-                for (auto it : vector)
+                for (auto const& rclValidation : currentStale)
                 {
-                    s.erase();
-                    it->add(s);
+                    STValidation::pointer const& val = rclValidation.unwrap();
+                    val->add(s);
 
-                    auto const ledgerHash = to_string(it->getLedgerHash());
+                    auto const ledgerHash = to_string(val->getLedgerHash());
 
                     boost::optional<std::uint64_t> ledgerSeq;
                     *db << findSeq, soci::use(ledgerHash),
@@ -332,9 +142,9 @@ RCLValidations::doWrite(ScopedLockType&)
                     auto const initialSeq = ledgerSeq.value_or(
                         app_.getLedgerMaster().getCurrentLedgerIndex());
                     auto const nodePubKey = toBase58(
-                        TokenType::TOKEN_NODE_PUBLIC, it->getSignerPublic());
+                        TokenType::TOKEN_NODE_PUBLIC, val->getSignerPublic());
                     auto const signTime =
-                        it->getSignTime().time_since_epoch().count();
+                        val->getSignTime().time_since_epoch().count();
 
                     soci::blob rawData(*db);
                     rawData.append(
@@ -352,7 +162,93 @@ RCLValidations::doWrite(ScopedLockType&)
         }
     }
 
-    writing_ = false;
+    staleWriting_ = false;
 }
 
+bool
+handleNewValidation(Application& app,
+    STValidation::ref val,
+    std::string const& source)
+{
+    PublicKey const& signer = val->getSignerPublic();
+    uint256 const& hash = val->getLedgerHash();
+
+    // Ensure validation is marked as trusted if signer currently trusted
+    boost::optional<PublicKey> pubKey = app.validators().getTrustedKey(signer);
+    if (!val->isTrusted() && pubKey)
+        val->setTrusted();
+    RCLValidations& validations  = app.getValidations();
+
+    beast::Journal j = validations.journal();
+
+    if (!val->isTrusted())
+    {
+        JLOG(j.trace()) << "Node "
+                        << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
+                        << " not in UNL st="
+                        << val->getSignTime().time_since_epoch().count()
+                        << ", hash=" << hash
+                        << ", shash=" << val->getSigningHash()
+                        << " src=" << source;
+    }
+
+    // If not currently trusted, see if signer is currently listed
+    if (!pubKey)
+        pubKey = app.validators().getListedKey(signer);
+
+    bool shouldRelay = false;
+
+    // only add trusted or listed
+    if (val->isTrusted() || pubKey)
+    {
+        using AddOutcome = RCLValidations::AddOutcome;
+
+        AddOutcome res = validations.add(*pubKey, val);
+
+        // This is a duplicate validation
+        if (res == AddOutcome::repeat)
+            return false;
+
+        // This validation replaced a prior one with the same sequence number
+        if (res == AddOutcome::sameSeq)
+        {
+            auto const seq = val->getFieldU32(sfLedgerSequence);
+            JLOG(j.warn()) << "Trusted node "
+                           << toBase58(TokenType::TOKEN_NODE_PUBLIC, *pubKey)
+                           << " published multiple validations for ledger "
+                           << seq;
+        }
+
+        const bool currVal = res == AddOutcome::current;
+
+        JLOG(j.debug()) << "Val for " << hash << " from "
+                    << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
+                    << " added "
+                    << (val->isTrusted() ? "trusted/" : "UNtrusted/")
+                    << (currVal ? "current" : "stale");
+
+        if (val->isTrusted() && currVal)
+        {
+            app.getLedgerMaster().checkAccept(
+                hash, val->getFieldU32(sfLedgerSequence));
+
+            shouldRelay = true;
+        }
+    }
+    else
+    {
+        JLOG(j.debug()) << "Val for " << hash << " from "
+                    << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
+                    << " not added UNtrustesd/";
+    }
+
+    // FIXME: This never forwards untrusted validations, from @JoelKatz:
+    // The idea was that we would have a certain number of validation slots with
+    // priority going to validators we trusted. Remaining slots might be
+    // allocated to validators that were listed by publishers we trusted but
+    // that we didn't choose to trust. The shorter term plan was just to forward
+    // untrusted validations if peers wanted them or if we had the
+    // ability/bandwidth to. None of that was implemented.
+    return shouldRelay;
+}
 }  // namespace ripple
