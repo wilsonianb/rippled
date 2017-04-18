@@ -867,6 +867,8 @@ class Validations_test : public beast::unit_test::suite
     testFlush()
     {
         // Test final flush of validations
+        using namespace std::chrono_literals;
+
         TestHarness harness;
 
         Node a = harness.makeNode(), b = harness.makeNode(),
