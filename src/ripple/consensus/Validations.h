@@ -220,11 +220,12 @@ class Validations
     //! Parameters to determine validation staleness
     ValidationParms const parms_;
 
+    beast::Journal j_;
+
     //! StalePolicy details providing now(),onStale() and flush callbacks
     //! Is NOT managed by the mutex_ above
     StalePolicy stalePolicy_;
 
-    beast::Journal j_;
 
 private:
     /** Iterate current validations.
