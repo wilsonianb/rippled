@@ -235,7 +235,7 @@ private:
         @param t (Optional) Time used to determine staleness
         @param f Callable with signature (NodeKey const &, Validations const &)
 
-        @warn The callable f is expected to be a simple transformation of its
+        @warning The callable f is expected to be a simple transformation of its
               arguments and will be called with mutex_ under lock.
 
     */
@@ -272,7 +272,7 @@ private:
         @param ledgerID The identifier of the ledger
         @param f Callable with signature (NodeKey const &, Validation const &)
 
-        @warn The callable f is expected to be a simple transformation of its
+        @warning The callable f is expected to be a simple transformation of its
               arguments and will be called with mutex_ under lock.
     */
     template <class F>
@@ -297,7 +297,7 @@ public:
         @param p ValidationParms to control staleness/expiration of validaitons
         @param c Clock to use for expiring validations stored by ledger
         @param j Journal used for logging
-        @param ... Parameters for constructing StalePolicy instance
+        @param ts Parameters for constructing StalePolicy instance
     */
     template <class... Ts>
     Validations(
@@ -343,7 +343,6 @@ public:
 
         Attempt to add a new validation.
 
-        @param t Current time
         @param key The NodeKey to use for the validation
         @param val The validation to store
         @return The outcome of the attempt
@@ -458,7 +457,6 @@ public:
         Calculates the distribution of current validations but allows
         ledgers one away from the current ledger to count as the current.
 
-        @param t Current time used to determine ledger staleness
         @param currentLedger The identifier of the ledger we believe is current
         @param priorLedger The identifier of our previous current ledger
         @param cutoffBefore Ignore ledgers with sequence number before this
@@ -621,7 +619,7 @@ public:
     /** Returns fees reported by trusted validators in the given ledger
 
         @param ledgerID The identifier of ledger of interest
-        @param base The fee to report if not present in the validation
+        @param baseFee The fee to report if not present in the validation
         @return Vector of fees
     */
     std::vector<std::uint64_t>
