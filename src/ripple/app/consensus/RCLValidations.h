@@ -56,13 +56,15 @@ public:
     }
 
     /// Validated ledger's sequence number (0 if none)
-    std::size_t
+    std::uint32_t
     seq() const
     {
-        return val_->getFieldU32(sfLedgerSequence);
+        if(auto res = (*val_)[~sfLedgerSequence])
+            return *res;
+        return 0;
     }
 
-    /// Validation ledger's signing time
+    /// Validation's signing time
     NetClock::time_point
     signTime() const
     {
@@ -97,30 +99,28 @@ public:
         return val_->isTrusted();
     }
 
-    /// Set the prior ledger hash this validation is replacing
+    /// Set the prior ledger hash this validation is following
     void
     setPreviousLedgerID(uint256 const& hash)
     {
         val_->setPreviousHash(hash);
     }
 
-    /// Check whether the given hash matches this validaiton's prior hash
+    /// Check whether the given hash matches this validation's prior hash
     bool
     isPreviousLedgerID(uint256 const& hash) const
     {
         return val_->isPreviousHash(hash);
     }
 
-    /// Get the load fee of the validation of it exists
-    boost::optional<std::uint64_t>
+    /// Get the load fee of the validation if it exists
+    boost::optional<std::uint32_t>
     loadFee() const
     {
-        if (val_->isFieldPresent(sfLoadFee))
-            return val_->getFieldU32(sfLoadFee);
-        return boost::none;
+        return ~(*val_)[~sfLoadFee];
     }
 
-    /// Extract the underlying STValidation being wrapepd
+    /// Extract the underlying STValidation being wrapped
     STValidation::pointer
     unwrap() const
     {
@@ -129,7 +129,7 @@ public:
 
 };
 
-/** Implements the StalePolicy policy class for adapating Validations in the RCL
+/** Implements the StalePolicy policy class for adapting Validations in the RCL
 
     Manages storing and writing stale RCLValidations to the sqlite DB.
 */
@@ -172,10 +172,10 @@ public:
     void
     onStale(RCLValidation&& v);
 
-     /** Flush current validations to disk before shutdown.
+    /** Flush current validations to disk before shutdown.
 
-         @param remaining The remaining validations to flush
-      */
+        @param remaining The remaining validations to flush
+    */
     void
     flush(hash_map<PublicKey, RCLValidation> && remaining);
 };
@@ -192,7 +192,7 @@ using RCLValidations =
     2. Add the validation to the set of validations if current.
     3. If new and trusted, send the validation to the ledgerMaster.
 
-    @param app Application object containing validations and ledgerMesger
+    @param app Application object containing validations and ledgerMaster
     @param val The validation to add
     @param source Name associated with validation used in logging
 

@@ -102,7 +102,7 @@ class Validations_test : public beast::unit_test::suite
         std::size_t nodeID_ = 0;
         bool trusted_ = true;
         std::size_t prevID_ = 0;
-        boost::optional<std::uint64_t> loadFee_;
+        boost::optional<std::uint32_t> loadFee_;
 
     public:
         ID
@@ -159,7 +159,7 @@ class Validations_test : public beast::unit_test::suite
             return prevID_ == prevID;
         }
 
-        boost::optional<std::uint64_t>
+        boost::optional<std::uint32_t>
         loadFee() const
         {
             return loadFee_;
@@ -469,8 +469,8 @@ class Validations_test : public beast::unit_test::suite
                 // Test the node changing signing key, then reissuing a ledger
 
                 // Confirm old ledger on hand, but not new ledger
-                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{2}));
-                BEAST_EXPECT(!harness.vals().numTrustedForLedger(ID{20}));
+                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{2}) == 1);
+                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{20}) == 0);
 
                 a.advanceKey();
 
@@ -478,8 +478,8 @@ class Validations_test : public beast::unit_test::suite
                 BEAST_EXPECT(
                     AddOutcome::sameSeq == harness.add(a, Seq{2}, ID{20}));
 
-                BEAST_EXPECT(!harness.vals().numTrustedForLedger(ID{2}));
-                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{20}));
+                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{2}) == 0);
+                BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{20}) == 1);
             }
 
             {
@@ -794,8 +794,8 @@ class Validations_test : public beast::unit_test::suite
                     sorted(expectedValidations));
 
                 std::vector<NetClock::time_point> expectedTimes;
-                std::uint64_t baseFee = 0;
-                std::vector<uint64_t> expectedFees;
+                std::uint32_t baseFee = 0;
+                std::vector<uint32_t> expectedFees;
                 for (auto const& val : expectedValidations)
                 {
                     expectedTimes.push_back(val.signTime());

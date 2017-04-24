@@ -90,8 +90,11 @@ RCLValidationsPolicy::flush(hash_map<PublicKey, RCLValidation>&& remaining)
             doStaleWrite(sl);
         }
 
-        // Handle the case where flush() is called while a queuedWrite
-        // is already in progress.
+        // In the case when a prior asynchronous doStaleWrite was scheduled, 
+        // this loop will block until all validations have been flushed.
+        // This ensures that all validations are written upon return from
+        // this function.
+
         while (staleWriting_)
         {
             ScopedUnlockType sul(staleLock_);
@@ -100,17 +103,17 @@ RCLValidationsPolicy::flush(hash_map<PublicKey, RCLValidation>&& remaining)
     }
 }
 
-// NOTE: doStaleWrite() must be called with mLock *locked*.  The passed
+// NOTE: doStaleWrite() must be called with staleLock_ *locked*.  The passed
 // ScopedLockType& acts as a reminder to future maintainers.
 void
 RCLValidationsPolicy::doStaleWrite(ScopedLockType&)
 {
-    std::string insVal(
+    static const std::string insVal(
         "INSERT INTO Validations "
         "(InitialSeq, LedgerSeq, LedgerHash,NodePubKey,SignTime,RawData) "
         "VALUES (:initialSeq, :ledgerSeq, "
         ":ledgerHash,:nodePubKey,:signTime,:rawData);");
-    std::string findSeq(
+    static const std::string findSeq(
         "SELECT LedgerSeq FROM Ledgers WHERE Ledgerhash=:ledgerHash;");
 
     assert(staleWriting_);
@@ -199,11 +202,11 @@ handleNewValidation(Application& app,
     bool shouldRelay = false;
 
     // only add trusted or listed
-    if (val->isTrusted() || pubKey)
+    if (pubKey)
     {
         using AddOutcome = RCLValidations::AddOutcome;
 
-        AddOutcome res = validations.add(*pubKey, val);
+        AddOutcome const res = validations.add(*pubKey, val);
 
         // This is a duplicate validation
         if (res == AddOutcome::repeat)
@@ -239,10 +242,11 @@ handleNewValidation(Application& app,
     {
         JLOG(j.debug()) << "Val for " << hash << " from "
                     << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                    << " not added UNtrustesd/";
+                    << " not added UNtrusted/";
     }
 
-    // FIXME: This never forwards untrusted validations, from @JoelKatz:
+    // This currently never forwards untrusted validations, though we may
+    // reconsider in the future. From @JoelKatz:
     // The idea was that we would have a certain number of validation slots with
     // priority going to validators we trusted. Remaining slots might be
     // allocated to validators that were listed by publishers we trusted but

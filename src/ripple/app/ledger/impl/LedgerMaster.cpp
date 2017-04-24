@@ -790,7 +790,7 @@ LedgerMaster::checkAccept (
         app_.getOrderBookDB().setup(ledger);
     }
 
-    std::uint64_t const base = app_.getFeeTrack().getLoadBase();
+    std::uint32_t const base = app_.getFeeTrack().getLoadBase();
     auto fees = app_.getValidations().fees (ledger->info().hash, base);
     {
         auto fees2 = app_.getValidations().fees (
@@ -798,7 +798,7 @@ LedgerMaster::checkAccept (
         fees.reserve (fees.size() + fees2.size());
         std::copy (fees2.begin(), fees2.end(), std::back_inserter(fees));
     }
-    std::uint64_t fee;
+    std::uint32_t fee;
     if (! fees.empty())
     {
         std::sort (fees.begin(), fees.end());

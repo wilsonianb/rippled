@@ -222,10 +222,9 @@ class Validations
 
     beast::Journal j_;
 
-    //! StalePolicy details providing now(),onStale() and flush callbacks
+    //! StalePolicy details providing now(), onStale() and flush() callbacks
     //! Is NOT managed by the mutex_ above
     StalePolicy stalePolicy_;
-
 
 private:
     /** Iterate current validations.
@@ -234,18 +233,23 @@ private:
         if a time is specified.
 
         @param t (Optional) Time used to determine staleness
-        @param f Callable with signature (NodeKey const &, Validations const &)
+        @param pre Invokable with signature (std::size_t) called prior to
+                   looping.
+        @param f Invokable with signature (NodeKey const &, Validations const &) 
+                 for each current validation.
 
-        @warning The callable f is expected to be a simple transformation of its
-              arguments and will be called with mutex_ under lock.
-
+        @note The invokable `pre` is called _prior_ to checking for staleness
+              and reflects an upper-bound on the number of calls to `f.
+        @warning The invokable `f` is expected to be a simple transformation of
+                 its arguments and will be called with mutex_ under lock.
     */
 
-    template <class F>
+    template <class Pre, class F>
     void
-    current(boost::optional<NetClock::time_point> t, F&& f)
+    current(boost::optional<NetClock::time_point> t, Pre&& pre, F&& f)
     {
         ScopedLock lock{mutex_};
+        pre(current_.size());
         auto it = current_.begin();
         while (it != current_.end())
         {
@@ -271,14 +275,17 @@ private:
     /** Iterate the set of validations associated with a given ledger id
 
         @param ledgerID The identifier of the ledger
-        @param f Callable with signature (NodeKey const &, Validation const &)
+        @param pre Invokable with signature(std::size_t)
+        @param f Invokable with signature (NodeKey const &, Validation const &)
 
-        @warning The callable f is expected to be a simple transformation of its
-              arguments and will be called with mutex_ under lock.
+        @note The invokable `pre` is called prior to iterating validations. The
+              argument is the number of times `f` will be called.
+        @warning The invokable f is expected to be a simple transformation of
+       its arguments and will be called with mutex_ under lock.
     */
-    template <class F>
+    template <class Pre, class F>
     void
-    byLedger(LedgerID const& ledgerID, F&& f)
+    byLedger(LedgerID const& ledgerID, Pre&& pre, F&& f)
     {
         ScopedLock lock{mutex_};
         auto it = byLedger_.find(ledgerID);
@@ -286,13 +293,13 @@ private:
         {
             // Update set time since it is being used
             byLedger_.touch(it);
+            pre(it->second.size());
             for (auto const& keyVal : it->second)
                 f(keyVal.first, keyVal.second);
         }
     }
 
 public:
-
     /** Constructor
 
         @param p ValidationParms to control staleness/expiration of validaitons
@@ -305,13 +312,13 @@ public:
         ValidationParms const& p,
         beast::abstract_clock<std::chrono::steady_clock>& c,
         beast::Journal j,
-        Ts && ... ts)
+        Ts&&... ts)
         : byLedger_(c), parms_(p), j_(j), stalePolicy_(std::forward<Ts>(ts)...)
     {
     }
 
     /** Return the validation timing parameters
-    */
+     */
     ValidationParms const&
     parms() const
     {
@@ -319,13 +326,12 @@ public:
     }
 
     /** Return the journal
-    */
+     */
     beast::Journal
     journal() const
     {
         return j_;
     }
-
 
     /** Result of adding a new validation
      */
@@ -381,8 +387,8 @@ public:
                 // previous validation existed, consider updating
                 Validation& oldVal = ins.first->second;
 
-                std::uint32_t const oldSeq = oldVal.seq();
-                std::uint32_t const newSeq = val.seq();
+                std::uint32_t const oldSeq{oldVal.seq()};
+                std::uint32_t const newSeq{val.seq()};
 
                 // Sequence of 0 indicates a missing sequence number
                 if (oldSeq && newSeq && oldSeq == newSeq)
@@ -473,38 +479,43 @@ public:
 
         hash_map<LedgerID, ValidationCounts> ret;
 
-        current(stalePolicy_.now(), [&](NodeKey const&, Validation const& v) {
+        current(
+            stalePolicy_.now(),
+            // The number of validations does not correspond to the number of
+            // distinct ledgerIDs so we do not call reserve on ret.
+            [&](std::size_t) {},
+            [&](NodeKey const&, Validation const& v) {
 
-            if (!v.trusted())
-                return;
+                if (!v.trusted())
+                    return;
 
-            std::uint32_t const seq = v.seq();
-            if ((seq == 0) || (seq >= cutoffBefore))
-            {
-                // contains a live record
-                bool countPreferred =
-                    valCurrentLedger && (v.ledgerID() == currentLedger);
-
-                if (!countPreferred &&  // allow up to one ledger slip in
-                                        // either direction
-                    ((valCurrentLedger &&
-                      v.isPreviousLedgerID(currentLedger)) ||
-                     (valPriorLedger && (v.ledgerID() == priorLedger))))
+                std::uint32_t const seq = v.seq();
+                if ((seq == 0) || (seq >= cutoffBefore))
                 {
-                    countPreferred = true;
-                    JLOG(j_.trace()) << "Counting for " << currentLedger
-                                    << " not " << v.ledgerID();
+                    // contains a live record
+                    bool countPreferred =
+                        valCurrentLedger && (v.ledgerID() == currentLedger);
+
+                    if (!countPreferred &&  // allow up to one ledger slip in
+                                            // either direction
+                        ((valCurrentLedger &&
+                          v.isPreviousLedgerID(currentLedger)) ||
+                         (valPriorLedger && (v.ledgerID() == priorLedger))))
+                    {
+                        countPreferred = true;
+                        JLOG(j_.trace()) << "Counting for " << currentLedger
+                                         << " not " << v.ledgerID();
+                    }
+
+                    ValidationCounts& p =
+                        countPreferred ? ret[currentLedger] : ret[v.ledgerID()];
+                    ++(p.count);
+
+                    NodeID const ni = v.nodeID();
+                    if (ni > p.highNode)
+                        p.highNode = ni;
                 }
-
-                ValidationCounts& p =
-                    countPreferred ? ret[currentLedger] : ret[v.ledgerID()];
-                ++(p.count);
-
-                NodeID const ni = v.nodeID();
-                if (ni > p.highNode)
-                    p.highNode = ni;
-            }
-        });
+            });
 
         return ret;
     }
@@ -526,10 +537,13 @@ public:
 
         // Historically this did not not check for stale validations
         // That may not be important, but this preserves the behavior
-        current(boost::none, [&](NodeKey const&, Validation const& v) {
-            if (v.trusted() && v.isPreviousLedgerID(ledgerID))
-                ++count;
-        });
+        current(
+            boost::none,
+            [&](std::size_t) {}, // nothing to reserve
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted() && v.isPreviousLedgerID(ledgerID))
+                    ++count;
+            });
         return count;
     }
 
@@ -542,10 +556,13 @@ public:
     {
         std::vector<WrappedValidationType> ret;
 
-        current(stalePolicy_.now(), [&](NodeKey const&, Validation const& v) {
-            if (v.trusted())
-                ret.push_back(v.unwrap());
-        });
+        current(
+            stalePolicy_.now(),
+            [&](std::size_t numValidations) { ret.reserve(numValidations); },
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted())
+                    ret.push_back(v.unwrap());
+            });
         return ret;
     }
 
@@ -558,14 +575,13 @@ public:
     getCurrentPublicKeys()
     {
         hash_set<NodeKey> ret;
-
-        current(stalePolicy_.now(), [&](NodeKey const& k, Validation const&) {
-            ret.insert(k);
-        });
+        current(
+            stalePolicy_.now(),
+            [&](std::size_t numValidations) { ret.reserve(numValidations); },
+            [&](NodeKey const& k, Validation const&) { ret.insert(k); });
 
         return ret;
     }
-
 
     /** Count the number of trusted validations for the given ledger
 
@@ -576,13 +592,15 @@ public:
     numTrustedForLedger(LedgerID const& ledgerID)
     {
         std::size_t count = 0;
-        byLedger(ledgerID, [&](NodeKey const&, Validation const& v) {
-            if (v.trusted())
-                ++count;
-        });
+        byLedger(
+            ledgerID,
+            [&](std::size_t) {}, // nothing to reserve
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted())
+                    ++count;
+            });
         return count;
     }
-
 
     /**  Get set of trusted validations associated with a given ledger
 
@@ -593,10 +611,13 @@ public:
     getTrustedForLedger(LedgerID const& ledgerID)
     {
         std::vector<WrappedValidationType> res;
-        byLedger(ledgerID, [&](NodeKey const&, Validation const& v) {
-            if (v.trusted())
-                res.emplace_back(v.unwrap());
-        });
+        byLedger(
+            ledgerID,
+            [&](std::size_t numValidations) { res.reserve(numValidations); },
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted())
+                    res.emplace_back(v.unwrap());
+            });
 
         return res;
     }
@@ -610,10 +631,13 @@ public:
     getTrustedValidationTimes(LedgerID const& ledgerID)
     {
         std::vector<NetClock::time_point> times;
-        byLedger(ledgerID, [&](NodeKey const&, Validation const& v) {
-            if (v.trusted())
-                times.emplace_back(v.signTime());
-        });
+        byLedger(
+            ledgerID,
+            [&](std::size_t numValidations) { times.reserve(numValidations); },
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted())
+                    times.emplace_back(v.signTime());
+            });
         return times;
     }
 
@@ -623,25 +647,28 @@ public:
         @param baseFee The fee to report if not present in the validation
         @return Vector of fees
     */
-    std::vector<std::uint64_t>
-    fees(LedgerID const& ledgerID, std::uint64_t baseFee)
+    std::vector<std::uint32_t>
+    fees(LedgerID const& ledgerID, std::uint32_t baseFee)
     {
-        std::vector<std::uint64_t> result;
-        byLedger(ledgerID, [&](NodeKey const&, Validation const& v) {
-            if (v.trusted())
-            {
-                boost::optional<std::uint64_t> loadFee = v.loadFee();
-                if (loadFee)
-                    result.push_back(*loadFee);
-                else
-                    result.push_back(baseFee);
-            }
-        });
-        return result;
+        std::vector<std::uint32_t> res;
+        byLedger(
+            ledgerID,
+            [&](std::size_t numValidations) { res.reserve(numValidations); },
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted())
+                {
+                    boost::optional<std::uint32_t> loadFee = v.loadFee();
+                    if (loadFee)
+                        res.push_back(*loadFee);
+                    else
+                        res.push_back(baseFee);
+                }
+            });
+        return res;
     }
 
     /** Flush all current validations
-    */
+     */
     void
     flush()
     {
@@ -657,9 +684,7 @@ public:
         stalePolicy_.flush(std::move(flushed));
 
         JLOG(j_.debug()) << "Validations flushed";
-
     }
-
 };
 }  // namespace ripple
 #endif
