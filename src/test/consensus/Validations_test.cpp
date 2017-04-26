@@ -101,7 +101,7 @@ class Validations_test : public beast::unit_test::suite
         std::string key_;
         std::size_t nodeID_ = 0;
         bool trusted_ = true;
-        std::size_t prevID_ = 0;
+        ID prevID_ = ID{0};
         boost::optional<std::uint32_t> loadFee_;
 
     public:
@@ -148,15 +148,21 @@ class Validations_test : public beast::unit_test::suite
         }
 
         void
-        setPreviousLedgerID(std::uint32_t const& prevID)
+        setPreviousLedgerID(ID const& prevID)
         {
             prevID_ = prevID;
         }
 
         bool
-        isPreviousLedgerID(std::uint32_t const& prevID) const
+        isPreviousLedgerID(ID const& prevID) const
         {
             return prevID_ == prevID;
+        }
+
+        ID
+        getPreviousLedgerID() const
+        {
+            return prevID_;
         }
 
         boost::optional<std::uint32_t>

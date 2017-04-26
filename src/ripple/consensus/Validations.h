@@ -156,6 +156,10 @@ isCurrent(
         // this validation replaced
         void setPreviousLedgerID(LedgerID &);
 
+        // Get the previous validation ledger from this publishing node that
+        // this validation replaced
+        LedgerID getPreviousLedgerID() const;
+
         // Check if this validation had the given ledger ID as its prior ledger
         bool isPreviousLedgerID(LedgerID const& ) const;
 
@@ -420,7 +424,8 @@ public:
                     maybeStaleValidation.emplace(std::move(oldVal));
                     // Replace old val in the map and set the previous ledger ID
                     ins.first->second = val;
-                    ins.first->second.setPreviousLedgerID(oldID);
+                    ins.first->second.setPreviousLedgerID(
+                        oldID != val.ledgerID() ? oldID : oldVal.getPreviousLedgerID());
                 }
                 else
                 {
