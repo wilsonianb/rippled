@@ -20,6 +20,7 @@
 #include <BeastConfig.h>
 #include <ripple/app/main/Application.h>
 #include <ripple/core/DatabaseCon.h>
+#include <ripple/app/consensus/RCLValidations.h>
 #include <ripple/app/main/DBInit.h>
 #include <ripple/app/main/BasicApp.h>
 #include <ripple/app/main/Tuning.h>

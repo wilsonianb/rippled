@@ -20,7 +20,7 @@
 #include <BeastConfig.h>
 #include <ripple/app/main/Application.h>
 #include <ripple/app/misc/AmendmentTable.h>
-#include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/protocol/STValidation.h>
 #include <ripple/core/DatabaseCon.h>
 #include <ripple/core/ConfigSections.h>
 #include <ripple/protocol/JsonFields.h>

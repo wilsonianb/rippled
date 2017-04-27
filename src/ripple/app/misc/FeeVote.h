@@ -22,7 +22,7 @@
 
 #include <ripple/ledger/ReadView.h>
 #include <ripple/shamap/SHAMap.h>
-#include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/protocol/STValidation.h>
 #include <ripple/basics/BasicConfig.h>
 #include <ripple/protocol/SystemParameters.h>
 

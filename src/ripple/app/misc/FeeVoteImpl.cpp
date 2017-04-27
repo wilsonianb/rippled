@@ -21,7 +21,7 @@
 #include <ripple/protocol/st.h>
 #include <ripple/app/misc/FeeVote.h>
 #include <ripple/app/main/Application.h>
-#include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/protocol/STValidation.h>
 #include <ripple/basics/BasicConfig.h>
 #include <ripple/beast/utility/Journal.h>
 

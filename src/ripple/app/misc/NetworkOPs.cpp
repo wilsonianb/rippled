@@ -21,6 +21,7 @@
 #include <ripple/app/misc/NetworkOPs.h>
 #include <ripple/consensus/Consensus.h>
 #include <ripple/app/consensus/RCLConsensus.h>
+#include <ripple/app/consensus/RCLValidations.h>
 #include <ripple/app/ledger/AcceptedLedger.h>
 #include <ripple/app/ledger/InboundLedgers.h>
 #include <ripple/app/ledger/LedgerMaster.h>

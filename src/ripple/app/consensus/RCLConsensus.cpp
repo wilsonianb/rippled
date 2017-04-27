@@ -20,6 +20,7 @@
 #include <BeastConfig.h>
 #include <ripple/beast/core/LexicalCast.h>
 #include <ripple/app/consensus/RCLConsensus.h>
+#include <ripple/app/consensus/RCLValidations.h>
 #include <ripple/app/ledger/InboundTransactions.h>
 #include <ripple/app/misc/NetworkOPs.h>
 #include <ripple/app/ledger/LedgerMaster.h>

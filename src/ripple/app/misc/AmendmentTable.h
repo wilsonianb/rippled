@@ -21,7 +21,7 @@
 #define RIPPLE_APP_MISC_AMENDMENTTABLE_H_INCLUDED
 
 #include <ripple/app/ledger/Ledger.h>
-#include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/protocol/STValidation.h>
 #include <ripple/core/ConfigSections.h>
 #include <ripple/protocol/Protocol.h>
 
