@@ -75,7 +75,7 @@ template<std::size_t... Is>
 TER
 ApplyContext::checkInvariantsHelper(TER terResult, std::index_sequence<Is...>)
 {
-    if (view_->rules().enabled(featureEnforceInvariants))
+    // if (view_->rules().enabled(featureEnforceInvariants))
     {
         auto checkers = getInvariantChecks();
 
@@ -104,9 +104,13 @@ ApplyContext::checkInvariantsHelper(TER terResult, std::index_sequence<Is...>)
         if (! std::all_of( finalizers.cbegin(), finalizers.cend(),
                 [](auto const& b) { return b; }))
         {
-            terResult = (terResult == tecINVARIANT_FAILED) ?
-                tefINVARIANT_FAILED :
-                tecINVARIANT_FAILED ;
+            if (view_->rules().enabled(featureEnforceInvariants))
+            {
+                terResult = (terResult == tecINVARIANT_FAILED) ?
+                    tefINVARIANT_FAILED :
+                    tecINVARIANT_FAILED ;
+            }
+
             JLOG(journal.error()) <<
                 "Transaction has failed one or more invariants: " <<
                 to_string(tx.getJson (0));
