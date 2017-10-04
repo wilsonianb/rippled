@@ -395,6 +395,9 @@ ValidatorList::removePublisherList (PublicKey const& publisherKey)
             --iVal->second;
     }
 
+    iList->second.list.clear();
+    iList->second.available = false;
+
     return true;
 }
 

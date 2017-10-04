@@ -726,7 +726,6 @@ private:
             std::vector<PublicKey> list ({randomNode()});
             hash_set<PublicKey> activeValidators ({ list[0] });
 
-            // do not apply expired list
             auto const version = 1;
             auto const sequence = 1;
             NetClock::time_point const expiration =
@@ -741,10 +740,13 @@ private:
 
             trustedKeys->onConsensusStart (activeValidators);
             BEAST_EXPECT(trustedKeys->trusted (list[0]));
+            BEAST_EXPECT(trustedKeys->quorum () == 1);
 
             env.timeKeeper().set(expiration);
             trustedKeys->onConsensusStart (activeValidators);
             BEAST_EXPECT(! trustedKeys->trusted (list[0]));
+            BEAST_EXPECT(trustedKeys->quorum () ==
+                std::numeric_limits<std::size_t>::max());
         }
         {
             // Test 1-9 configured validators
