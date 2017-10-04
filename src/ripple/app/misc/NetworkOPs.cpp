@@ -2148,6 +2148,11 @@ Json::Value NetworkOPsImp::getServerInfo (bool human, bool admin)
     info[jss::validation_quorum] = static_cast<Json::UInt>(
         app_.validators ().quorum ());
 
+    if (auto when = app_.validators().expires())
+        info[jss::validator_list_expires] = to_string(*when);
+    else
+        info[jss::validator_list_expires] = "unknown";
+
     info[jss::io_latency_ms] = static_cast<Json::UInt> (
         app_.getIOLatency().count());
 

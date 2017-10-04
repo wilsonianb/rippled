@@ -25,6 +25,7 @@
 #include <ripple/basics/UnorderedContainers.h>
 #include <ripple/core/TimeKeeper.h>
 #include <ripple/crypto/csprng.h>
+#include <ripple/json/json_value.h>
 #include <ripple/protocol/PublicKey.h>
 #include <boost/iterator/counting_iterator.hpp>
 #include <boost/range/adaptors.hpp>
@@ -50,8 +51,11 @@ enum class ListDisposition
     stale,
 
     /// Invalid format or signature
-    invalid,
+    invalid
 };
+
+std::string
+to_string(ListDisposition disposition);
 
 /**
     Trusted Validators List
@@ -102,7 +106,7 @@ class ValidatorList
         bool available;
         std::vector<PublicKey> list;
         std::size_t sequence;
-		TimeKeeper::time_point expiration;
+        TimeKeeper::time_point expiration;
     };
 
     ManifestCache& validatorManifests_;
@@ -316,6 +320,26 @@ public:
     void
     for_each_listed (
         std::function<void(PublicKey const&, bool)> func) const;
+
+    /** Return the time when the validator list will expire
+
+        @note This may be a time in the past if a published list has not
+        been updated since its expiration. It will be boost::none if there is no
+        valid publisher list loaded.
+
+        @par Thread Safety
+        May be called concurrently
+    */
+    boost::optional<TimeKeeper::time_point>
+    expires() const;
+
+    /** Return a JSON representation of the state of the validator list
+
+        @par Thread Safety
+        May be called concurrently
+    */
+    Json::Value
+    getJson() const;
 
 private:
     /** Check response for trusted valid published list

@@ -899,6 +899,82 @@ private:
         }
     }
 
+    void
+    testExpires()
+    {
+        testcase("Stale");
+
+        beast::Journal journal;
+        jtx::Env env(*this);
+
+        auto toStr = [](PublicKey const& publicKey) {
+            return toBase58(TokenType::TOKEN_NODE_PUBLIC, publicKey);
+        };
+
+        // Config listed keys
+        {
+            ManifestCache manifests;
+            auto trustedKeys = std::make_unique<ValidatorList>(
+                manifests, manifests, env.timeKeeper(), journal);
+
+            // Empty list has no expiration
+            BEAST_EXPECT(trustedKeys->expires() == boost::none);
+
+            // Config listed keys have maximum expiry
+            PublicKey emptyLocalKey;
+            PublicKey localCfgListed = randomNode();
+            trustedKeys->load(emptyLocalKey, {toStr(localCfgListed)}, {});
+            BEAST_EXPECT(
+                trustedKeys->expires() &&
+                trustedKeys->expires().get() == NetClock::time_point::max());
+            BEAST_EXPECT(trustedKeys->listed(localCfgListed));
+        }
+
+        // Manifest published keys with expirations
+        {
+            ManifestCache manifests;
+            auto trustedKeys = std::make_unique<ValidatorList>(
+                manifests, manifests, env.app().timeKeeper(), journal);
+
+            auto const publisherSecret = randomSecretKey();
+            auto const publisherPublic =
+                derivePublicKey(KeyType::ed25519, publisherSecret);
+            auto const pubSigningKeys = randomKeyPair(KeyType::secp256k1);
+            auto const manifest =
+                beast::detail::base64_encode(makeManifestString(
+                    publisherPublic,
+                    publisherSecret,
+                    pubSigningKeys.first,
+                    pubSigningKeys.second,
+                    1));
+
+            std::vector<std::string> cfgKeys({strHex(publisherPublic)});
+            PublicKey emptyLocalKey;
+            std::vector<std::string> emptyCfgKeys;
+
+            BEAST_EXPECT(
+                trustedKeys->load(emptyLocalKey, emptyCfgKeys, cfgKeys));
+
+            // Initially, no manifest has been published, so never stale
+            BEAST_EXPECT(trustedKeys->expires() == boost::none);
+
+            std::vector<PublicKey> list = {randomNode(), randomNode()};
+            // apply single list
+            NetClock::time_point const expiration =
+                env.timeKeeper().now() + 3600s;
+            auto const blob =
+                makeList(list, 1, expiration.time_since_epoch().count());
+            auto const sig = signList(blob, pubSigningKeys);
+
+            BEAST_EXPECT(
+                ListDisposition::accepted ==
+                trustedKeys->applyList(manifest, blob, sig, 1));
+
+            BEAST_EXPECT(
+                trustedKeys->expires() &&
+                trustedKeys->expires().get() == expiration);
+        }
+}
 public:
     void
     run() override
@@ -907,6 +983,7 @@ public:
         testConfigLoad ();
         testApplyList ();
         testUpdate ();
+        testExpires ();
     }
 };
 

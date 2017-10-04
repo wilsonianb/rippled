@@ -21,10 +21,30 @@
 #include <ripple/basics/Slice.h>
 #include <ripple/basics/StringUtilities.h>
 #include <ripple/json/json_reader.h>
+#include <ripple/protocol/JsonFields.h>
 #include <beast/core/detail/base64.hpp>
 #include <boost/regex.hpp>
 
 namespace ripple {
+
+std::string
+to_string(ListDisposition disposition)
+{
+    switch (disposition)
+    {
+        case ListDisposition::accepted:
+            return "accepted";
+        case ListDisposition::unsupported_version:
+            return "unsupported_version";
+        case ListDisposition::untrusted:
+            return "untrusted";
+        case ListDisposition::stale:
+            return "stale";
+        case ListDisposition::invalid:
+            return "invalid";
+    }
+    return "unknown";
+}
 
 ValidatorList::ValidatorList (
     ManifestCache& validatorManifests,
@@ -408,6 +428,68 @@ ValidatorList::removePublisherList (PublicKey const& publisherKey)
     iList->second.available = false;
 
     return true;
+}
+
+boost::optional<TimeKeeper::time_point>
+ValidatorList::expires() const
+{
+    boost::shared_lock<boost::shared_mutex> read_lock{mutex_};
+    boost::optional<TimeKeeper::time_point> res{boost::none};
+    for (auto const& p : publisherLists_)
+    {
+        if (p.second.available &&
+            TimeKeeper::time_point{} < p.second.expiration)
+        {
+            if (!res || p.second.expiration < *res)
+                res = p.second.expiration;
+        }
+    }
+    return res;
+}
+
+Json::Value
+ValidatorList::getJson() const
+{
+    Json::Value res(Json::objectValue);
+
+    boost::shared_lock<boost::shared_mutex> read_lock{mutex_};
+
+    res[jss::validation_quorum] = static_cast<Json::UInt>(quorum());
+
+    if (auto when = expires())
+        res[jss::validator_list_expires] = to_string(*when);
+    else
+        res[jss::validator_list_expires] = "unknown";
+
+    // Publisher lists
+    Json::Value& jPublisherLists =
+        (res[jss::publisher_lists] = Json::arrayValue);
+    for (auto const& p : publisherLists_)
+    {
+        Json::Value& curr = jPublisherLists.append(Json::objectValue);
+        curr[jss::pubkey_publisher] = strHex(p.first);
+        curr[jss::seq] = static_cast<Json::UInt>(p.second.sequence);
+        curr[jss::available] = p.second.available;
+        curr[jss::expiration] = to_string(p.second.expiration);
+        Json::Value& keys = (curr[jss::list] = Json::arrayValue);
+        for (auto const& key : p.second.list)
+        {
+            keys.append(toBase58(TokenType::TOKEN_NODE_PUBLIC, key));
+        }
+    }
+
+    // Current validator keys
+    Json::Value& jValidatorKeys = (res[jss::validator_keys] = Json::arrayValue);
+    for (auto const& v : keyListings_)
+    {
+        Json::Value& curr = jValidatorKeys.append(Json::objectValue);
+        curr[jss::pubkey_validator] =
+            toBase58(TokenType::TOKEN_NODE_PUBLIC, v.first);
+        curr[jss::trusted] = trusted(v.first);
+        curr[jss::count] = static_cast<Json::UInt>(v.second);
+    }
+
+    return res;
 }
 
 void
