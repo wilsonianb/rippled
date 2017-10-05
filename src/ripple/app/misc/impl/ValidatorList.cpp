@@ -150,8 +150,15 @@ ValidatorList::load (
             JLOG (j_.warn()) << "Duplicate node identity: " << match[1];
             continue;
         }
-        publisherLists_[local].list.emplace_back (std::move(*id));
-        publisherLists_[local].available = true;
+        auto it = publisherLists_.emplace(
+            std::piecewise_construct,
+            std::forward_as_tuple(local),
+            std::forward_as_tuple());
+        // Config listed keys never expire
+		if (it.second)
+            it.first->second.expiration = TimeKeeper::time_point::max();
+        it.first->second.list.emplace_back(std::move(*id));
+        it.first->second.available = true;
         ++count;
     }
 
@@ -184,7 +191,8 @@ ValidatorList::applyList (
     Json::Value const& newList = list["validators"];
     publisherLists_[pubKey].available = true;
     publisherLists_[pubKey].sequence = list["sequence"].asUInt ();
-    publisherLists_[pubKey].expiration = list["expiration"].asUInt ();
+    publisherLists_[pubKey].expiration = TimeKeeper::time_point{
+        TimeKeeper::duration{list["expiration"].asUInt()}};
     std::vector<PublicKey>& publisherList = publisherLists_[pubKey].list;
 
     std::vector<PublicKey> oldList = publisherList;
@@ -302,10 +310,11 @@ ValidatorList::verify (
         list.isMember("expiration") && list["expiration"].isInt() &&
         list.isMember("validators") && list["validators"].isArray())
     {
-        auto const sequence = list["sequence"].asUInt ();
-        auto const expiration = list["expiration"].asUInt ();
+        auto const sequence = list["sequence"].asUInt();
+        auto const expiration = TimeKeeper::time_point{
+            TimeKeeper::duration{list["expiration"].asUInt()}};
         if (sequence <= publisherLists_[pubKey].sequence ||
-                expiration <= timeKeeper_.now().time_since_epoch().count())
+            expiration <= timeKeeper_.now())
             return ListDisposition::stale;
     }
     else

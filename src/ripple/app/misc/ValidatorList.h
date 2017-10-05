@@ -102,7 +102,7 @@ class ValidatorList
         bool available;
         std::vector<PublicKey> list;
         std::size_t sequence;
-        std::size_t expiration;
+		TimeKeeper::time_point expiration;
     };
 
     ManifestCache& validatorManifests_;
@@ -373,10 +373,9 @@ ValidatorList::onConsensusStart (
     for (auto const& list : publisherLists_)
     {
         // Remove any expired published lists
-        if (list.second.expiration &&
-                list.second.expiration <=
-                timeKeeper_.now().time_since_epoch().count())
-            removePublisherList (list.first);
+        if (TimeKeeper::time_point{} < list.second.expiration &&
+            list.second.expiration <= timeKeeper_.now())
+            removePublisherList(list.first);
 
         if (! list.second.available)
             allListsAvailable = false;
