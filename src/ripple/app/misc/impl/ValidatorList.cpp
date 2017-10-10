@@ -175,7 +175,7 @@ ValidatorList::load (
             std::forward_as_tuple(local),
             std::forward_as_tuple());
         // Config listed keys never expire
-		if (it.second)
+        if (it.second)
             it.first->second.expiration = TimeKeeper::time_point::max();
         it.first->second.list.emplace_back(std::move(*id));
         it.first->second.available = true;
