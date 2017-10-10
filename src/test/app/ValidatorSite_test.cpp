@@ -172,11 +172,11 @@ private:
             env.timeKeeper().now() + 3600s;
 
         TrustedPublisherServer server1(
-            ep1, ioService, pubSigningKeys1, manifest1, sequence,
+            ep1, pubSigningKeys1, manifest1, sequence,
             expiration, version, list1);
 
         TrustedPublisherServer server2(
-            ep2, ioService, pubSigningKeys2, manifest2, sequence,
+            ep2, pubSigningKeys2, manifest2, sequence,
             expiration, version, list2);
 
         {

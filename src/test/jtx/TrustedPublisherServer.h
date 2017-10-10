@@ -41,22 +41,27 @@ class TrustedPublisherServer
     using resp_type = beast::http::response<beast::http::string_body>;
     using error_code = boost::system::error_code;
 
+    boost::asio::io_service ios_;
+    boost::optional<boost::asio::io_service::work> work_;
+    std::thread iosThread_;
+
     socket_type sock_;
     boost::asio::ip::tcp::acceptor acceptor_;
 
     std::string list_;
 
 public:
-    TrustedPublisherServer(
-        endpoint_type const& ep,
-        boost::asio::io_service& ios,
+    TrustedPublisherServer(endpoint_type const& ep,
         std::pair<PublicKey, SecretKey> keys,
         std::string const& manifest,
         int sequence,
         NetClock::time_point expiration,
         int version,
         std::vector<PublicKey> const& validators)
-        : sock_(ios), acceptor_(ios)
+        : work_{ios_}
+        , iosThread_([&]() { this->ios_.run(); })
+        , sock_(ios_)
+        , acceptor_(ios_)
     {
         std::string data = "{\"sequence\":" + std::to_string(sequence) +
             ",\"expiration\":" +
@@ -85,16 +90,16 @@ public:
             boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
         acceptor_.bind(ep);
         acceptor_.listen(boost::asio::socket_base::max_connections);
-        acceptor_.async_accept(
-            sock_,
-            std::bind(
-                &TrustedPublisherServer::on_accept, this, std::placeholders::_1));
+        acceptor_.async_accept(sock_, [this](error_code ec) { on_accept(ec); });
     }
 
     ~TrustedPublisherServer()
     {
         error_code ec;
         acceptor_.close(ec);
+        work_ = boost::none;
+        ios_.stop();
+        iosThread_.join();
     }
 
 private:
@@ -103,13 +108,11 @@ private:
         int id;
         TrustedPublisherServer& self;
         socket_type sock;
-        boost::asio::io_service::work work;
 
         lambda(int id_, TrustedPublisherServer& self_, socket_type&& sock_)
             : id(id_)
             , self(self_)
             , sock(std::move(sock_))
-            , work(sock.get_io_service())
         {
         }
 
@@ -130,10 +133,7 @@ private:
 
         static int id_ = 0;
         std::thread{lambda{++id_, *this, std::move(sock_)}}.detach();
-        acceptor_.async_accept(
-            sock_,
-            std::bind(
-                &TrustedPublisherServer::on_accept, this, std::placeholders::_1));
+        acceptor_.async_accept(sock_, [this](error_code ec) { on_accept(ec); });
     }
 
     void
