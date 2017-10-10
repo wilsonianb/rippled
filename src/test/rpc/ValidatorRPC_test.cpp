@@ -87,7 +87,8 @@ public:
         {
             for (Cmd const cmd : {Cmd{"validator_lists", true},
                                   Cmd{"validator_sites", true},
-                                  Cmd{"server_info", false}})
+                                  Cmd{"server_info", false},
+                                  Cmd{"server_state", false}})
             {
                 Env env{*this, isAdmin ? envconfig() : envconfig(no_admin)};
                 auto const jrr = env.rpc(cmd.rpcCommand)[jss::result];
@@ -131,6 +132,12 @@ public:
             BEAST_EXPECT(
                 jrr[jss::info][jss::validator_list_expires] ==
                 to_string(NetClock::time_point::max()));
+        }
+        {
+            auto const jrr = env.rpc("server_state")[jss::result];
+            BEAST_EXPECT(
+                jrr[jss::state][jss::validator_list_expires].asUInt() ==
+                NetClock::time_point::max().time_since_epoch().count());
         }
         // All our keys are in the response
         {
@@ -207,6 +214,11 @@ public:
                     jrr[jss::info][jss::validator_list_expires] == "unknown");
             }
             {
+                auto const jrr = env.rpc("server_state")[jss::result];
+                BEAST_EXPECT(
+                    jrr[jss::state][jss::validator_list_expires].asInt() == 0);
+            }
+            {
                 auto const jrr = env.rpc("validator_lists")[jss::result];
                 BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() ==
                     std::numeric_limits<std::uint32_t>::max());
@@ -263,6 +275,12 @@ public:
                 auto const jrr = env.rpc("server_info")[jss::result];
                 BEAST_EXPECT(jrr[jss::info][jss::validator_list_expires] ==
                     to_string(expiration));
+            }
+            {
+                auto const jrr = env.rpc("server_state")[jss::result];
+                BEAST_EXPECT(
+                    jrr[jss::state][jss::validator_list_expires].asUInt() ==
+                    expiration.time_since_epoch().count());
             }
             {
                 auto const jrr = env.rpc("validator_lists")[jss::result];

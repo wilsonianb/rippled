@@ -2149,10 +2149,20 @@ Json::Value NetworkOPsImp::getServerInfo (bool human, bool admin)
         app_.validators ().quorum ());
 
     if (auto when = app_.validators().expires())
-        info[jss::validator_list_expires] = to_string(*when);
+    {
+        if(human)
+            info[jss::validator_list_expires] = to_string(*when);
+        else
+            info[jss::validator_list_expires] =
+                static_cast<Json::UInt>(when->time_since_epoch().count());
+    }
     else
-        info[jss::validator_list_expires] = "unknown";
-
+    {
+        if(human)
+            info[jss::validator_list_expires] = "unknown";
+        else
+            info[jss::validator_list_expires] = 0;
+    }
     info[jss::io_latency_ms] = static_cast<Json::UInt> (
         app_.getIOLatency().count());
 
