@@ -28,7 +28,6 @@
 #include <test/jtx.h>
 #include <test/jtx/TrustedPublisherServer.h>
 
-#include <boost/format.hpp>
 #include <set>
 
 namespace ripple {
@@ -73,7 +72,7 @@ class ValidatorRPC_test : public beast::unit_test::suite
 
 public:
     void
-    testPriviledges()
+    testPrivileges()
     {
         using namespace test::jtx;
 
@@ -190,15 +189,14 @@ public:
         for (auto const& key : keys)
             expectedKeys.insert(toStr(key));
 
-        // Publisher site information
-        std::uint16_t constexpr port = 7475;
-        endpoint_type ep{address_type::from_string("127.0.0.1"), port};
-        std::string siteURI =
-            "http://127.0.0.1:" + std::to_string(port) + "/validators";
 
         //----------------------------------------------------------------------
         // Publisher list site unavailable
         {
+            // Publisher site information
+            endpoint_type ep{address_type::from_string("127.0.0.1"), 1234};
+            std::string siteURI = "http://127.0.0.1:1234/validators";
+
             Env env{
                 *this,
                 envconfig([&](std::unique_ptr<Config> cfg) {
@@ -253,8 +251,16 @@ public:
         // Publisher list site available
         {
             NetClock::time_point const expiration{3600s};
+
+            // 0 port means to use OS port selection
+            endpoint_type ep{address_type::from_string("127.0.0.1"), 0};
+
             TrustedPublisherServer server(
                 ep, publisherSigningKeys, manifest, 1, expiration, 1, keys);
+
+            endpoint_type const & local_ep = server.local_endpoint();
+            std::string siteURI = "http://127.0.0.1:" +
+                std::to_string(local_ep.port()) + "/validators";
 
             Env env{
                 *this,
@@ -338,7 +344,7 @@ public:
     void
     run()
     {
-        testPriviledges();
+        testPrivileges();
         testStaticUNL();
         testDynamicUNL();
     }

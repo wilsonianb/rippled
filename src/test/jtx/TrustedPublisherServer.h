@@ -102,6 +102,11 @@ public:
         iosThread_.join();
     }
 
+    endpoint_type
+    local_endpoint() const
+    {
+        return acceptor_.local_endpoint();
+    }
 private:
     struct lambda
     {

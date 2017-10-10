@@ -113,7 +113,6 @@ private:
         using namespace jtx;
 
         Env env (*this);
-        auto& ioService = env.app ().getIOService ();
         auto& trustedKeys = env.app ().validators ();
 
         beast::Journal journal;
