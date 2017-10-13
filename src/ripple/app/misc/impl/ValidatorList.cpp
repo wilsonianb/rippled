@@ -196,7 +196,7 @@ ValidatorList::applyList (
     std::string const& signature,
     std::uint32_t version)
 {
-    if (version != 1)
+    if (version != requiredListVersion)
         return ListDisposition::unsupported_version;
 
     boost::unique_lock<boost::shared_mutex> lock{mutex_};
@@ -471,6 +471,7 @@ ValidatorList::getJson() const
         curr[jss::seq] = static_cast<Json::UInt>(p.second.sequence);
         curr[jss::available] = p.second.available;
         curr[jss::expiration] = to_string(p.second.expiration);
+        curr[jss::version] = requiredListVersion;
         Json::Value& keys = (curr[jss::list] = Json::arrayValue);
         for (auto const& key : p.second.list)
         {
@@ -481,9 +482,9 @@ ValidatorList::getJson() const
     // Current validator keys
     Json::Value& jValidatorKeys =
         (res[jss::trusted_validator_keys] = Json::arrayValue);
-    for (auto const& v : keyListings_)
+    for (auto const& k : trustedKeys_)
     {
-        jValidatorKeys.append(toBase58(TokenType::TOKEN_NODE_PUBLIC, v.first));
+        jValidatorKeys.append(toBase58(TokenType::TOKEN_NODE_PUBLIC, k));
     }
 
     return res;

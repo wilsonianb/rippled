@@ -129,6 +129,9 @@ class ValidatorList
 
     PublicKey localPubKey_;
 
+    // Currently supported version of publisher list format
+    static constexpr std::uint32_t requiredListVersion = 1;
+
     // The minimum number of listed validators required to allow removing
     // non-communicative validators from the trusted set. In other words, if the
     // number of listed validators is less, then use all of them in the
@@ -137,6 +140,8 @@ class ValidatorList
     // The maximum size of a trusted set for which greater than Byzantine fault
     // tolerance isn't needed.
     std::size_t const BYZANTINE_THRESHOLD {32};
+
+
 
 public:
     ValidatorList (

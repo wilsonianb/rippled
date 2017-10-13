@@ -100,8 +100,8 @@ public:
                 {
                     // The current HTTP/S ServerHandler returns an HTTP 403
                     // error code here rather than a noPermission JSON error.
-                    // The JSONRPCClient just eats that error and returns an
-                    // null result.
+                    // The JSONRPCClient just eats that error and returns null
+                    // result.
                     BEAST_EXPECT(jrr.isNull());
                 }
             }
@@ -192,7 +192,6 @@ public:
         // Publisher list site unavailable
         {
             // Publisher site information
-            endpoint_type ep{address_type::from_string("127.0.0.1"), 1234};
             std::string siteURI = "http://127.0.0.1:1234/validators";
 
             Env env{
@@ -231,6 +230,7 @@ public:
                         jp[jss::pubkey_publisher] == strHex(publisherPublic));
                     BEAST_EXPECT(jp[jss::expiration] ==
                         to_string(TimeKeeper::time_point{}));
+                    BEAST_EXPECT(jp[jss::version] == 1);
                 }
             }
             {
@@ -317,6 +317,7 @@ public:
                     BEAST_EXPECT(
                         jp[jss::pubkey_publisher] == strHex(publisherPublic));
                     BEAST_EXPECT(jp[jss::expiration] == to_string(expiration));
+                    BEAST_EXPECT(jp[jss::version] == 1);
                 }
             }
             {
@@ -327,7 +328,7 @@ public:
                     BEAST_EXPECT(js[jss::refresh_interval_min].asUInt() == 5);
                     BEAST_EXPECT(js[jss::uri] == siteURI);
                     BEAST_EXPECT(js[jss::last_refresh_status] == "accepted");
-                    // The actual time of the udpate will vary run to run, so
+                    // The actual time of the update will vary run to run, so
                     // just verify the time is there
                     BEAST_EXPECT(js.isMember(jss::last_refresh_time));
                 }
