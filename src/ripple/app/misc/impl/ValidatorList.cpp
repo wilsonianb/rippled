@@ -461,11 +461,25 @@ ValidatorList::getJson() const
     else
         res[jss::validator_list_expires] = "unknown";
 
+    // Local static keys
+    PublicKey local;
+    Json::Value& jLocalStaticKeys =
+        (res[jss::local_static_keys] = Json::arrayValue);
+    auto it = publisherLists_.find(local);
+    if (it != publisherLists_.end())
+    {
+        for (auto const& key : it->second.list)
+            jLocalStaticKeys.append(
+                toBase58(TokenType::TOKEN_NODE_PUBLIC, key));
+    }
+
     // Publisher lists
     Json::Value& jPublisherLists =
         (res[jss::publisher_lists] = Json::arrayValue);
     for (auto const& p : publisherLists_)
     {
+        if(local == p.first)
+            continue;
         Json::Value& curr = jPublisherLists.append(Json::objectValue);
         curr[jss::pubkey_publisher] = strHex(p.first);
         curr[jss::seq] = static_cast<Json::UInt>(p.second.sequence);
@@ -479,7 +493,7 @@ ValidatorList::getJson() const
         }
     }
 
-    // Current validator keys
+    // Trusted validator keys
     Json::Value& jValidatorKeys =
         (res[jss::trusted_validator_keys] = Json::arrayValue);
     for (auto const& k : trustedKeys_)
