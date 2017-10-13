@@ -76,22 +76,13 @@ public:
     {
         using namespace test::jtx;
 
-        struct Cmd
-        {
-            std::string rpcCommand;
-            bool adminOnly;
-        };
-
         for (bool const isAdmin : {true, false})
         {
-            for (Cmd const cmd : {Cmd{"validator_lists", true},
-                                  Cmd{"validator_sites", true},
-                                  Cmd{"server_info", false},
-                                  Cmd{"server_state", false}})
+            for (std::string cmd : {"validator_lists", "validator_sites"})
             {
                 Env env{*this, isAdmin ? envconfig() : envconfig(no_admin)};
-                auto const jrr = env.rpc(cmd.rpcCommand)[jss::result];
-                if (isAdmin || !cmd.adminOnly)
+                auto const jrr = env.rpc(cmd)[jss::result];
+                if (isAdmin)
                 {
                     BEAST_EXPECT(!jrr.isMember(jss::error));
                     BEAST_EXPECT(jrr[jss::status] == "success");
@@ -104,6 +95,22 @@ public:
                     // result.
                     BEAST_EXPECT(jrr.isNull());
                 }
+            }
+
+            {
+                Env env{*this, isAdmin ? envconfig() : envconfig(no_admin)};
+                auto const jrr = env.rpc("server_info")[jss::result];
+                BEAST_EXPECT(jrr[jss::status] == "success");
+                BEAST_EXPECT(jrr[jss::info].isMember(
+                                 jss::validator_list_expires) == isAdmin);
+            }
+
+            {
+                Env env{*this, isAdmin ? envconfig() : envconfig(no_admin)};
+                auto const jrr = env.rpc("server_state")[jss::result];
+                BEAST_EXPECT(jrr[jss::status] == "success");
+                BEAST_EXPECT(jrr[jss::state].isMember(
+                                 jss::validator_list_expires) == isAdmin);
             }
         }
     }
