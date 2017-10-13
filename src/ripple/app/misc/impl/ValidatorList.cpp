@@ -479,14 +479,11 @@ ValidatorList::getJson() const
     }
 
     // Current validator keys
-    Json::Value& jValidatorKeys = (res[jss::validator_keys] = Json::arrayValue);
+    Json::Value& jValidatorKeys =
+        (res[jss::trusted_validator_keys] = Json::arrayValue);
     for (auto const& v : keyListings_)
     {
-        Json::Value& curr = jValidatorKeys.append(Json::objectValue);
-        curr[jss::pubkey_validator] =
-            toBase58(TokenType::TOKEN_NODE_PUBLIC, v.first);
-        curr[jss::trusted] = trusted(v.first);
-        curr[jss::count] = static_cast<Json::UInt>(v.second);
+        jValidatorKeys.append(toBase58(TokenType::TOKEN_NODE_PUBLIC, v.first));
     }
 
     return res;

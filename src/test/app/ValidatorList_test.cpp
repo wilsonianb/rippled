@@ -902,7 +902,7 @@ private:
     void
     testExpires()
     {
-        testcase("Stale");
+        testcase("Expires");
 
         beast::Journal journal;
         jtx::Env env(*this);
@@ -930,7 +930,7 @@ private:
             BEAST_EXPECT(trustedKeys->listed(localCfgListed));
         }
 
-        // Manifest published keys with expirations
+        // Published keys with expirations
         {
             ManifestCache manifests;
             auto trustedKeys = std::make_unique<ValidatorList>(
@@ -955,7 +955,7 @@ private:
             BEAST_EXPECT(
                 trustedKeys->load(emptyLocalKey, emptyCfgKeys, cfgKeys));
 
-            // Initially, no manifest has been published, so never stale
+            // Initially, no list has been published, so never stale
             BEAST_EXPECT(trustedKeys->expires() == boost::none);
 
             std::vector<PublicKey> list = {randomNode(), randomNode()};

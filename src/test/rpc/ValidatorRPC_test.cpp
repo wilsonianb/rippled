@@ -145,13 +145,11 @@ public:
                 jrr[jss::validator_list_expires] ==
                 to_string(NetClock::time_point::max()));
             BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() == keys.size());
-            BEAST_EXPECT(jrr[jss::validator_keys].size() == keys.size());
-            std::set<std::string> foundKeys;
-            for (auto const& jKeys : jrr[jss::validator_keys])
+            BEAST_EXPECT(jrr[jss::trusted_validator_keys].size() == keys.size());
+            for (auto const& jKey : jrr[jss::trusted_validator_keys])
             {
-                foundKeys.insert(jKeys[jss::pubkey_validator].asString());
+                BEAST_EXPECT(keys.count(jKey.asString())== 1);
             }
-            BEAST_EXPECT(foundKeys == keys);
         }
         // No validator sites configured
         {
@@ -220,7 +218,7 @@ public:
                 auto const jrr = env.rpc("validator_lists")[jss::result];
                 BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() ==
                     std::numeric_limits<std::uint32_t>::max());
-                BEAST_EXPECT(jrr[jss::validator_keys].size() == 0);
+                BEAST_EXPECT(jrr[jss::trusted_validator_keys].size() == 0);
                 BEAST_EXPECT(jrr[jss::validator_list_expires] == "unknown");
 
                 if (BEAST_EXPECT(jrr[jss::publisher_lists].size() == 1))
@@ -294,15 +292,11 @@ public:
                 BEAST_EXPECT(
                     jrr[jss::validator_list_expires] == to_string(expiration));
 
-                if (BEAST_EXPECT(jrr[jss::validator_keys].size() == 2))
+                BEAST_EXPECT(jrr[jss::trusted_validator_keys].size() ==
+                    expectedKeys.size());
+                for (auto const& jKey : jrr[jss::trusted_validator_keys])
                 {
-                    std::set<std::string> foundKeys;
-                    for (auto const& jKeys : jrr[jss::validator_keys])
-                    {
-                        foundKeys.insert(
-                            jKeys[jss::pubkey_validator].asString());
-                    }
-                    BEAST_EXPECT(foundKeys == expectedKeys);
+                    BEAST_EXPECT(expectedKeys.count(jKey.asString()) == 1);
                 }
 
                 if (BEAST_EXPECT(jrr[jss::publisher_lists].size() == 1))

@@ -271,6 +271,9 @@ ValidatorSite::onSiteFetch(
             JLOG (j_.warn()) <<
                 "Unable to parse JSON response from  " <<
                 sites_[siteIdx].uri;
+
+            sites_[siteIdx].lastRefreshStatus.emplace(
+                Site::Status{clock_type::now(), ListDisposition::invalid});
         }
     }
 

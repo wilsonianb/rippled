@@ -28,7 +28,6 @@ namespace ripple {
 Json::Value
 doValidatorSites(RPC::Context& context)
 {
-    auto lock = make_lock(context.app.getMasterMutex());
     return context.app.validatorSites().getJson();
 }
 
