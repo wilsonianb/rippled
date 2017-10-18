@@ -78,7 +78,7 @@ public:
 
         for (bool const isAdmin : {true, false})
         {
-            for (std::string cmd : {"validator_lists", "validator_sites"})
+            for (std::string cmd : {"validators", "validator_list_sites"})
             {
                 Env env{*this, isAdmin ? envconfig() : envconfig(no_admin)};
                 auto const jrr = env.rpc(cmd)[jss::result];
@@ -137,7 +137,7 @@ public:
             auto const jrr = env.rpc("server_info")[jss::result];
             BEAST_EXPECT(
                 jrr[jss::info][jss::validator_list_expires] ==
-                to_string(NetClock::time_point::max()));
+                "never");
         }
         {
             auto const jrr = env.rpc("server_state")[jss::result];
@@ -147,7 +147,7 @@ public:
         }
         // All our keys are in the response
         {
-            auto const jrr = env.rpc("validator_lists")[jss::result];
+            auto const jrr = env.rpc("validators")[jss::result];
             BEAST_EXPECT(
                 jrr[jss::validator_list_expires] ==
                 to_string(NetClock::time_point::max()));
@@ -162,7 +162,7 @@ public:
         }
         // No validator sites configured
         {
-            auto const jrr = env.rpc("validator_sites")[jss::result];
+            auto const jrr = env.rpc("validator_list_sites")[jss::result];
             BEAST_EXPECT(jrr[jss::validator_sites].size() == 0);
         }
     }
@@ -223,7 +223,7 @@ public:
                     jrr[jss::state][jss::validator_list_expires].asInt() == 0);
             }
             {
-                auto const jrr = env.rpc("validator_lists")[jss::result];
+                auto const jrr = env.rpc("validators")[jss::result];
                 BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() ==
                     std::numeric_limits<std::uint32_t>::max());
                 BEAST_EXPECT(jrr[jss::local_static_keys].size() == 0);
@@ -244,7 +244,7 @@ public:
                 }
             }
             {
-                auto const jrr = env.rpc("validator_sites")[jss::result];
+                auto const jrr = env.rpc("validator_list_sites")[jss::result];
                 if (BEAST_EXPECT(jrr[jss::validator_sites].size() == 1))
                 {
                     auto js = jrr[jss::validator_sites][0u];
@@ -297,7 +297,7 @@ public:
                     expiration.time_since_epoch().count());
             }
             {
-                auto const jrr = env.rpc("validator_lists")[jss::result];
+                auto const jrr = env.rpc("validators")[jss::result];
                 BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() == 2);
                 BEAST_EXPECT(
                     jrr[jss::validator_list_expires] == to_string(expiration));
@@ -332,7 +332,7 @@ public:
                 }
             }
             {
-                auto const jrr = env.rpc("validator_sites")[jss::result];
+                auto const jrr = env.rpc("validator_list_sites")[jss::result];
                 if (BEAST_EXPECT(jrr[jss::validator_sites].size() == 1))
                 {
                     auto js = jrr[jss::validator_sites][0u];

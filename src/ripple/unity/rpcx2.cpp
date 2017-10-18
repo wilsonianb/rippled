@@ -48,8 +48,8 @@
 #include <ripple/rpc/handlers/Unsubscribe.cpp>
 #include <ripple/rpc/handlers/ValidationCreate.cpp>
 #include <ripple/rpc/handlers/ValidationSeed.cpp>
-#include <ripple/rpc/handlers/ValidatorLists.cpp>
-#include <ripple/rpc/handlers/ValidatorSites.cpp>
+#include <ripple/rpc/handlers/Validators.cpp>
+#include <ripple/rpc/handlers/ValidatorListSites.cpp>
 #include <ripple/rpc/handlers/WalletPropose.cpp>
 #include <ripple/rpc/handlers/WalletSeed.cpp>
 

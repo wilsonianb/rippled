@@ -2153,7 +2153,12 @@ Json::Value NetworkOPsImp::getServerInfo (bool human, bool admin)
         if (auto when = app_.validators().expires())
         {
             if (human)
-                info[jss::validator_list_expires] = to_string(*when);
+            {
+                if(*when == TimeKeeper::time_point::max())
+                    info[jss::validator_list_expires] = "never";
+                else
+                    info[jss::validator_list_expires] = to_string(*when);
+            }
             else
                 info[jss::validator_list_expires] =
                     static_cast<Json::UInt>(when->time_since_epoch().count());

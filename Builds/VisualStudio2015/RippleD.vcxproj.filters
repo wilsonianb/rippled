@@ -3630,10 +3630,10 @@
     <ClCompile Include="..\..\src\ripple\rpc\handlers\ValidationSeed.cpp">
       <Filter>ripple\rpc\handlers</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ripple\rpc\handlers\ValidatorLists.cpp">
+    <ClCompile Include="..\..\src\ripple\rpc\handlers\ValidatorListSites.cpp">
       <Filter>ripple\rpc\handlers</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\ripple\rpc\handlers\ValidatorSites.cpp">
+    <ClCompile Include="..\..\src\ripple\rpc\handlers\Validators.cpp">
       <Filter>ripple\rpc\handlers</Filter>
     </ClCompile>
     <ClInclude Include="..\..\src\ripple\rpc\handlers\Version.h">
