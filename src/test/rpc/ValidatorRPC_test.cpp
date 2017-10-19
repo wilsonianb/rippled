@@ -18,6 +18,7 @@
 //==============================================================================
 
 #include <BeastConfig.h>
+#include <ripple/app/main/BasicApp.h>
 #include <ripple/app/misc/ValidatorSite.h>
 #include <ripple/beast/unit_test.h>
 #include <ripple/core/ConfigSections.h>
@@ -263,8 +264,22 @@ public:
             // 0 port means to use OS port selection
             endpoint_type ep{address_type::from_string("127.0.0.1"), 0};
 
+            // Manage single thread io_service for server
+            struct Worker : BasicApp
+            {
+                Worker() : BasicApp(1) {}
+            };
+            Worker w;
+
             TrustedPublisherServer server(
-                ep, publisherSigningKeys, manifest, 1, expiration, 1, keys);
+                ep,
+                w.get_io_service(),
+                publisherSigningKeys,
+                manifest,
+                1,
+                expiration,
+                1,
+                keys);
 
             endpoint_type const & local_ep = server.local_endpoint();
             std::string siteURI = "http://127.0.0.1:" +

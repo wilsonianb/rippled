@@ -171,12 +171,24 @@ private:
             env.timeKeeper().now() + 3600s;
 
         TrustedPublisherServer server1(
-            ep1, pubSigningKeys1, manifest1, sequence,
-            expiration, version, list1);
+            ep1,
+            env.app().getIOService(),
+            pubSigningKeys1,
+            manifest1,
+            sequence,
+            expiration,
+            version,
+            list1);
 
         TrustedPublisherServer server2(
-            ep2, pubSigningKeys2, manifest2, sequence,
-            expiration, version, list2);
+            ep2,
+            env.app().getIOService(),
+            pubSigningKeys2,
+            manifest2,
+            sequence,
+            expiration,
+            version,
+            list2);
 
         {
             // fetch single site
