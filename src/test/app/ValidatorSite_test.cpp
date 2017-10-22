@@ -156,14 +156,13 @@ private:
         while (list2.size () < listSize)
             list2.push_back (randomNode());
 
-        std::uint16_t constexpr port1 = 7475;
-        std::uint16_t constexpr port2 = 7476;
 
         using endpoint_type = boost::asio::ip::tcp::endpoint;
         using address_type = boost::asio::ip::address;
 
-        endpoint_type ep1{address_type::from_string("127.0.0.1"), port1};
-        endpoint_type ep2{address_type::from_string("127.0.0.1"), port2};
+        // Use ports of 0 to allow OS selection
+        endpoint_type ep1{address_type::from_string("127.0.0.1"), 0};
+        endpoint_type ep2{address_type::from_string("127.0.0.1"), 0};
 
         auto const sequence = 1;
         auto const version = 1;
@@ -189,6 +188,10 @@ private:
             expiration,
             version,
             list2);
+
+        std::uint16_t const port1 = server1.local_endpoint().port();
+        std::uint16_t const port2 = server2.local_endpoint().port();
+
 
         {
             // fetch single site

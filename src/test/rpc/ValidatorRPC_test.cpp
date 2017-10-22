@@ -137,8 +137,7 @@ public:
         {
             auto const jrr = env.rpc("server_info")[jss::result];
             BEAST_EXPECT(
-                jrr[jss::info][jss::validator_list_expires] ==
-                "never");
+                jrr[jss::info][jss::validator_list_expires] == "never");
         }
         {
             auto const jrr = env.rpc("server_state")[jss::result];
@@ -149,9 +148,7 @@ public:
         // All our keys are in the response
         {
             auto const jrr = env.rpc("validators")[jss::result];
-            BEAST_EXPECT(
-                jrr[jss::validator_list_expires] ==
-                to_string(NetClock::time_point::max()));
+            BEAST_EXPECT(jrr[jss::validator_list_expires] == "never");
             BEAST_EXPECT(jrr[jss::validation_quorum].asUInt() == keys.size());
             BEAST_EXPECT(jrr[jss::trusted_validator_keys].size() == keys.size());
             BEAST_EXPECT(jrr[jss::publisher_lists].size() == 0);

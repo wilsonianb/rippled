@@ -85,8 +85,8 @@ Json::Value doWalletPropose         (RPC::Context&);
 Json::Value doWalletSeed            (RPC::Context&);
 Json::Value doWalletUnlock          (RPC::Context&);
 Json::Value doWalletVerify          (RPC::Context&);
-Json::Value doValidatorLists        (RPC::Context&);
-Json::Value doValidatorSites        (RPC::Context&);
+Json::Value doValidators            (RPC::Context&);
+Json::Value doValidatorListSites    (RPC::Context&);
 } // ripple
 
 #endif

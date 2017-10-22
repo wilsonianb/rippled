@@ -457,7 +457,12 @@ ValidatorList::getJson() const
     res[jss::validation_quorum] = static_cast<Json::UInt>(quorum());
 
     if (auto when = expires())
-        res[jss::validator_list_expires] = to_string(*when);
+    {
+        if (*when == TimeKeeper::time_point::max())
+            res[jss::validator_list_expires] = "never";
+        else
+            res[jss::validator_list_expires] = to_string(*when);
+    }
     else
         res[jss::validator_list_expires] = "unknown";
 
