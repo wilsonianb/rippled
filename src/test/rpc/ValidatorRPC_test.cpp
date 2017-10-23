@@ -233,12 +233,11 @@ public:
                     auto jp = jrr[jss::publisher_lists][0u];
                     BEAST_EXPECT(jp[jss::available] == false);
                     BEAST_EXPECT(jp[jss::list].size() == 0);
-                    BEAST_EXPECT(jp[jss::seq].asUInt() == 0);
+                    BEAST_EXPECT(!jp.isMember(jss::seq));
+                    BEAST_EXPECT(!jp.isMember(jss::expiration));
+                    BEAST_EXPECT(!jp.isMember(jss::version));
                     BEAST_EXPECT(
                         jp[jss::pubkey_publisher] == strHex(publisherPublic));
-                    BEAST_EXPECT(jp[jss::expiration] ==
-                        to_string(TimeKeeper::time_point{}));
-                    BEAST_EXPECT(jp[jss::version] == 1);
                 }
             }
             {

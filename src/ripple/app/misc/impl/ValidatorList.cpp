@@ -487,10 +487,13 @@ ValidatorList::getJson() const
             continue;
         Json::Value& curr = jPublisherLists.append(Json::objectValue);
         curr[jss::pubkey_publisher] = strHex(p.first);
-        curr[jss::seq] = static_cast<Json::UInt>(p.second.sequence);
         curr[jss::available] = p.second.available;
-        curr[jss::expiration] = to_string(p.second.expiration);
-        curr[jss::version] = requiredListVersion;
+        if(p.second.expiration != TimeKeeper::time_point{})
+        {
+            curr[jss::seq] = static_cast<Json::UInt>(p.second.sequence);
+            curr[jss::expiration] = to_string(p.second.expiration);
+            curr[jss::version] = requiredListVersion;
+        }
         Json::Value& keys = (curr[jss::list] = Json::arrayValue);
         for (auto const& key : p.second.list)
         {
