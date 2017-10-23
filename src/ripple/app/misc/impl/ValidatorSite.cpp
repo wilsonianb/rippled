@@ -241,6 +241,12 @@ ValidatorSite::onSiteFetch(
                     "Applied new validator list from " <<
                     sites_[siteIdx].uri;
             }
+            else if (ListDisposition::same_sequence == disp)
+            {
+                JLOG (j_.debug()) <<
+                    "Validator list with current sequence from " <<
+                    sites_[siteIdx].uri;
+            }
             else if (ListDisposition::stale == disp)
             {
                 JLOG (j_.warn()) <<

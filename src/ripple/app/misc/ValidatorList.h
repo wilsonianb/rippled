@@ -41,6 +41,9 @@ enum class ListDisposition
     /// List is valid
     accepted = 0,
 
+    /// Same sequence as current list
+    same_sequence,
+
     /// List version is not supported
     unsupported_version,
 

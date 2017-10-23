@@ -34,6 +34,8 @@ to_string(ListDisposition disposition)
     {
         case ListDisposition::accepted:
             return "accepted";
+        case ListDisposition::same_sequence:
+            return "same_sequence";
         case ListDisposition::unsupported_version:
             return "unsupported_version";
         case ListDisposition::untrusted:
@@ -333,9 +335,11 @@ ValidatorList::verify (
         auto const sequence = list["sequence"].asUInt();
         auto const expiration = TimeKeeper::time_point{
             TimeKeeper::duration{list["expiration"].asUInt()}};
-        if (sequence <= publisherLists_[pubKey].sequence ||
+        if (sequence < publisherLists_[pubKey].sequence ||
             expiration <= timeKeeper_.now())
             return ListDisposition::stale;
+        else if (sequence == publisherLists_[pubKey].sequence)
+            return ListDisposition::same_sequence;
     }
     else
     {

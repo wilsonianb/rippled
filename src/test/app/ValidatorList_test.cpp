@@ -425,7 +425,7 @@ private:
             trustedKeys->applyList (
                 manifest1, blob1, sig1, version));
 
-        BEAST_EXPECT(ListDisposition::stale ==
+        BEAST_EXPECT(ListDisposition::same_sequence ==
             trustedKeys->applyList (
                 manifest1, blob2, sig2, version));
 
