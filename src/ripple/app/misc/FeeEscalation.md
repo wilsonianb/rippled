@@ -246,7 +246,7 @@ change without warning.**
 `fee` takes no parameters, and returns information about the current local
 [fee escalation](#fee-escalation) and [transaction queue](#transaction-queue)
 state as both fee levels and drops. The drop values assume a
-single-singed reference transaction. It is up to the user to compute the
+single-signed reference transaction. It is up to the user to compute the
 neccessary fees for other types of transactions. (E.g. multiply all drop
 values by 5 for a multi-signed transaction with 4 signatures.)
 

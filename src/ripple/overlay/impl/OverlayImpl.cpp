@@ -685,7 +685,8 @@ OverlayImpl::onManifests (
             }
             else
             {
-                JLOG(journal.info()) << "Bad manifest #" << i + 1;
+                JLOG(journal.info()) << ((result == ManifestDisposition::stale)
+                    ? "Stale" : "Invalid") << " manifest #" << i + 1;
             }
         }
         else

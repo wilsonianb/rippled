@@ -101,7 +101,7 @@ the majority status from the ledger.
 If an amendment holds majority status for two weeks, validators will
 introduce a pseudo-transaction to enable the amendment.
 
-All amednements are assumed to be critical and irreversible. Thus there
+All amendments are assumed to be critical and irreversible. Thus there
 is no mechanism to disable or revoke an amendment, nor is there a way
 for a server to operate while an amendment it does not understand is
 enabled.
