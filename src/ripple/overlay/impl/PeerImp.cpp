@@ -2028,8 +2028,7 @@ PeerImp::checkValidation (STValidation::pointer val,
     try
     {
         // VFALCO Which functions throw?
-        uint256 signingHash = val->getSigningHash();
-        if (! cluster() && !val->isValid (signingHash))
+        if (! cluster() && !val->isValid ())
         {
             JLOG(p_journal_.warn()) <<
                 "Validation is invalid";
