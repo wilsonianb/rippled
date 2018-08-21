@@ -29,6 +29,8 @@
 #include <ripple/basics/base64.h>
 #include <ripple/beast/unit_test.h>
 
+#include <boost/beast/core/detail/base64.hpp>
+
 namespace ripple {
 
 class base64_test : public beast::unit_test::suite
@@ -68,7 +70,7 @@ public:
 
         std::string const notBase64 = "not_base64!!";
         std::string const truncated = "not";
-        BEAST_EXPECT(base64_decode(notBase64) == base64_decode(truncated));
+        BEAST_EXPECT(boost::beast::detail::base64_decode(notBase64) == base64_decode(truncated));
     }
 };
 
