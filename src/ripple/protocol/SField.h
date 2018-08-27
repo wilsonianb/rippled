@@ -377,6 +377,8 @@ extern SF_U32 const sfCancelAfter;
 extern SF_U32 const sfFinishAfter;
 extern SF_U32 const sfSignerListID;
 extern SF_U32 const sfSettleDelay;
+extern SF_U32 const sfRangeStart;
+extern SF_U32 const sfRangeEnd;
 
 // 64-bit integers
 extern SF_U64 const sfIndexNext;
@@ -489,6 +491,7 @@ extern SField const sfNewFields;
 extern SField const sfTemplateEntry;
 extern SField const sfMemo;
 extern SField const sfSignerEntry;
+extern SField const sfSkippedRange;
 extern SField const sfSigner;
 extern SField const sfMajority;
 
@@ -502,6 +505,7 @@ extern SField const sfNecessary;
 extern SField const sfSufficient;
 extern SField const sfAffectedNodes;
 extern SField const sfMemos;
+extern SField const sfSkippedSeqs;
 extern SField const sfMajorities;
 
 //------------------------------------------------------------------------------

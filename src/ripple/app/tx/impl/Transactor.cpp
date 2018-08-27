@@ -243,9 +243,11 @@ Transactor::checkSeq (PreclaimContext const& ctx)
     std::uint32_t const t_seq = ctx.tx.getSequence ();
     std::uint32_t const a_seq = sle->getFieldU32 (sfSequence);
 
+    bool const allowUnorderedSeq = true; // Set to true if opting in
+
     if (t_seq != a_seq)
     {
-        if (a_seq < t_seq)
+        if (a_seq < t_seq && !allowUnorderedSeq)
         {
             JLOG(ctx.j.trace()) <<
                 "applyTransaction: has future sequence number " <<
@@ -256,9 +258,23 @@ Transactor::checkSeq (PreclaimContext const& ctx)
         if (ctx.view.txExists(ctx.tx.getTransactionID ()))
             return tefALREADY;
 
-        JLOG(ctx.j.trace()) << "applyTransaction: has past sequence number " <<
-            "a_seq=" << a_seq << " t_seq=" << t_seq;
-        return tefPAST_SEQ;
+        auto isSkippedSequence = [&sle](std::uint32_t const txSeq)
+        {
+            if (! sle->isFieldPresent (sfSkippedSeqs))
+                return false;
+
+            STArray const& ranges (sle->getFieldArray (sfSkippedSeqs));
+
+            // binary search the array to find range containing txSeq
+            return true;
+        };
+
+        if (! allowUnorderedSeq || a_seq == t_seq+1 || !isSkippedSequence(t_seq))
+        {
+            JLOG(ctx.j.trace()) << "applyTransaction: has past sequence number " <<
+                "a_seq=" << a_seq << " t_seq=" << t_seq;
+            return tefPAST_SEQ;
+        }
     }
 
     if (ctx.tx.isFieldPresent (sfAccountTxnID) &&
@@ -279,8 +295,29 @@ Transactor::setSeq ()
         keylet::account(account_));
 
     std::uint32_t const t_seq = ctx_.tx.getSequence ();
+    std::uint32_t const a_seq = sle->getFieldU32 (sfSequence);
 
-    sle->setFieldU32 (sfSequence, t_seq + 1);
+    bool const allowUnorderedSeq = true; // Set to true if opting in
+
+    if (! allowUnorderedSeq || a_seq <= t_seq)
+    {
+        sle->setFieldU32 (sfSequence, t_seq + 1);
+        if (a_seq < t_seq)
+        {
+            // append new range at the end of the skipped sequences array
+            // addSkippedSequenceRange(sle, a_seq /* low */, t_seq /* high */);
+        }
+    }
+    else
+    {
+        // update existing skipped sequences range(s) to remove used sequence
+        // This would have to search for the range containing the transaction id again.
+        // So we either:
+        // - search for the range in checkSeq and again here
+        // - search for the range in checkSeq and somehow stored the index to quickly lookup here
+        // - don't search in checkSeq and change setSeq to return a TER for if we don't find it
+        // removeSkippedSequence(sle, t_seq);
+    }
 
     if (sle->isFieldPresent (sfAccountTxnID))
         sle->setFieldH256 (sfAccountTxnID, ctx_.tx.getTransactionID ());

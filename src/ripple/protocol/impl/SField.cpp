@@ -131,6 +131,8 @@ SF_U32 const sfCancelAfter         = make::one<SF_U32::type>(&sfCancelAfter,    
 SF_U32 const sfFinishAfter         = make::one<SF_U32::type>(&sfFinishAfter,         STI_UINT32, 37, "FinishAfter");
 SF_U32 const sfSignerListID        = make::one<SF_U32::type>(&sfSignerListID,        STI_UINT32, 38, "SignerListID");
 SF_U32 const sfSettleDelay         = make::one<SF_U32::type>(&sfSettleDelay,         STI_UINT32, 39, "SettleDelay");
+SF_U32 const sfRangeStart          = make::one<SF_U32::type>(&sfRangeStart,          STI_UINT32, 40, "RangeStart");
+SF_U32 const sfRangeEnd            = make::one<SF_U32::type>(&sfRangeEnd,            STI_UINT32, 41, "RangeEnd");
 
 // 64-bit integers
 SF_U64 const sfIndexNext        = make::one<SF_U64::type>(&sfIndexNext,        STI_UINT64, 1, "IndexNext");
@@ -245,6 +247,7 @@ SField const sfNewFields           = make::one(&sfNewFields,           STI_OBJEC
 SField const sfTemplateEntry       = make::one(&sfTemplateEntry,       STI_OBJECT,  9, "TemplateEntry");
 SField const sfMemo                = make::one(&sfMemo,                STI_OBJECT, 10, "Memo");
 SField const sfSignerEntry         = make::one(&sfSignerEntry,         STI_OBJECT, 11, "SignerEntry");
+SField const sfSkippedRange        = make::one(&sfSkippedRange,        STI_OBJECT, 12, "SkippedRange");
 
 // inner object (uncommon)
 SField const sfSigner              = make::one(&sfSigner,              STI_OBJECT, 16, "Signer");
@@ -261,6 +264,7 @@ SField const sfNecessary       = make::one(&sfNecessary,       STI_ARRAY, 6, "Ne
 SField const sfSufficient      = make::one(&sfSufficient,      STI_ARRAY, 7, "Sufficient");
 SField const sfAffectedNodes   = make::one(&sfAffectedNodes,   STI_ARRAY, 8, "AffectedNodes");
 SField const sfMemos           = make::one(&sfMemos,           STI_ARRAY, 9, "Memos");
+SField const sfSkippedSeqs     = make::one(&sfSkippedSeqs,     STI_ARRAY, 10, "SkippedSequences");
 
 // array of objects (uncommon)
 SField const sfMajorities      = make::one(&sfMajorities,      STI_ARRAY, 16, "Majorities");

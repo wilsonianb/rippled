@@ -33,6 +33,11 @@ InnerObjectFormats::InnerObjectFormats ()
         << SOElement (sfSigningPubKey,        SOE_REQUIRED)
         << SOElement (sfTxnSignature,         SOE_REQUIRED)
         ;
+
+    add (sfSkippedRange.getJsonName ().c_str (), sfSkippedRange.getCode ())
+        << SOElement (sfRangeStart,           SOE_REQUIRED)
+        << SOElement (sfRangeEnd,             SOE_REQUIRED)
+        ;
 }
 
 void InnerObjectFormats::addCommonFields (Item& item)
