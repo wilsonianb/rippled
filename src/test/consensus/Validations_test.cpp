@@ -316,10 +316,14 @@ class Validations_test : public beast::unit_test::suite
 
             // Add a current validation
             BEAST_EXPECT(ValStatus::current == harness.add(v));
+            BEAST_EXPECT(
+                harness.vals().numTrustedForLedger(ledgerA.id()) == 1);
 
             // Re-adding violates the increasing seq requirement for full
-            // validations
+            // validations and invalids previously received validation.
             BEAST_EXPECT(ValStatus::badSeq == harness.add(v));
+            BEAST_EXPECT(
+                harness.vals().numTrustedForLedger(ledgerA.id()) == 1);
 
             harness.clock().advance(1s);
             // Replace with a new validation and ensure the old one is stale
@@ -418,8 +422,8 @@ class Validations_test : public beast::unit_test::suite
         }
 
         {
-            // Test that full or partials cannot be sent for older sequence
-            // numbers, unless time-out has happened
+            // Test that full or partials cannot be sent for same or older
+            // sequence numbers, unless time-out has happened
             for (bool doFull : {true, false})
             {
                 TestHarness harness(h.oracle);
@@ -432,16 +436,41 @@ class Validations_test : public beast::unit_test::suite
                     return harness.add(n.partial(lgr));
                 };
 
-                BEAST_EXPECT(ValStatus::current == process(ledgerABC));
-                harness.clock().advance(1s);
-                BEAST_EXPECT(ledgerAB.seq() < ledgerABC.seq());
-                BEAST_EXPECT(ValStatus::badSeq == process(ledgerAB));
+                auto advanceClock = [&](auto const& elapsed)
+                {
+                    harness.clock().advance(elapsed);
+                    harness.vals().expire();
+                };
+
+                BEAST_EXPECT(ValStatus::current == process(ledgerAB));
+                BEAST_EXPECT(
+                    harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 1);
+
+                // A different validation for the same sequence causes the first
+                // to be removed
+                advanceClock(harness.parms().validationSET_EXPIRES - 1ms);
+                BEAST_EXPECT(ledgerAB.seq() == ledgerAZ.seq());
+                BEAST_EXPECT(ValStatus::badSeq == process(ledgerAZ));
+                BEAST_EXPECT(
+                    harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 0);
 
                 // If we advance far enough for AB to expire, we can fully
                 // validate or partially validate that sequence number again
+                advanceClock(2ms);
+                BEAST_EXPECT(ValStatus::current == process(ledgerAZ));
+                BEAST_EXPECT(
+                    harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 1);
+
+                BEAST_EXPECT(ValStatus::current == process(ledgerABC));
+                advanceClock(harness.parms().validationSET_EXPIRES - 1ms);
+                BEAST_EXPECT(ledgerAB.seq() < ledgerABC.seq());
+                BEAST_EXPECT(ValStatus::badSeq == process(ledgerAB));
+
+                // If we advance far enough for ABC (and AB/AZ) to expire, we
+                // can fully validate or partially validate a lower sequence
+                // number again
                 BEAST_EXPECT(ValStatus::badSeq == process(ledgerAZ));
-                harness.clock().advance(
-                    harness.parms().validationSET_EXPIRES + 1ms);
+                advanceClock(2ms);
                 BEAST_EXPECT(ValStatus::current == process(ledgerAZ));
             }
         }
@@ -719,7 +748,6 @@ class Validations_test : public beast::unit_test::suite
         {
             auto const val = d.validate(ledgerB);
             BEAST_EXPECT(ValStatus::current == harness.add(val));
-            trustedValidations[val.ledgerID()].emplace_back(val);
         }
         // e only issues partials
         {

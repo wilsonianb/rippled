@@ -118,6 +118,7 @@ public:
         return seq_;
     }
 };
+
 /** Whether a validation is still current
 
     Determines whether a validation can still be considered the current
@@ -303,6 +304,15 @@ class Validations
         std::chrono::steady_clock,
         beast::uhash<>>
         byLedger_;
+
+    //! Validated ledgers from listed nodes indexed by ledger seq
+    //! (partial and full)
+    beast::aged_unordered_map<
+        Seq,
+        hash_map<NodeID, ID>,
+        std::chrono::steady_clock,
+        beast::uhash<>>
+        bySeq_;
 
     // Represents the ancestry of validated ledgers
     LedgerTrie<Ledger> trie_;
@@ -532,7 +542,7 @@ public:
         ValidationParms const& p,
         beast::abstract_clock<std::chrono::steady_clock>& c,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), adaptor_(std::forward<Ts>(ts)...)
+        : byLedger_(c), bySeq_(c), parms_(p), adaptor_(std::forward<Ts>(ts)...)
     {
     }
 
@@ -583,6 +593,30 @@ public:
         {
             ScopedLock lock{mutex_};
 
+            // Check if a validator with this nodeID already issued a validation
+            // for this sequence
+            auto const bySeqIt = bySeq_[val.seq()].emplace(nodeID, val.ledgerID());
+            if(!bySeqIt.second)
+            {
+                // Remove prior validation if it was for a different ledger
+                ID const priorID = bySeqIt.first->second;
+                if (priorID != val.ledgerID())
+                {
+                    auto const byLedgerIt = byLedger_.find(priorID);
+                    if (byLedgerIt != byLedger_.end())
+                        byLedger_[priorID].erase(nodeID);
+                    auto const currIt = current_.find(nodeID);
+                    if (currIt != current_.end() &&
+                        currIt->second.ledgerID() == priorID)
+                    {
+                        removeTrie(lock, currIt->first, currIt->second);
+                        adaptor_.onStale(std::move(currIt->second));
+                        current_.erase(currIt);
+                    }
+                }
+                return ValStatus::badSeq;
+            }
+
             // Check that validation sequence is greater than any non-expired
             // validations sequence from that validator
             auto const now = byLedger_.clock().now();
@@ -600,7 +634,9 @@ public:
             {
                 // Replace existing only if this one is newer
                 Validation& oldVal = ins.first->second;
-                if (val.signTime() > oldVal.signTime())
+                if (val.signTime() > oldVal.signTime() ||
+                    (val.signTime() == oldVal.signTime() &&
+                    oldVal.seq() < val.seq()))
                 {
                     std::pair<Seq,ID> old(oldVal.seq(),oldVal.ledgerID());
                     adaptor_.onStale(std::move(oldVal));
@@ -629,6 +665,7 @@ public:
     {
         ScopedLock lock{mutex_};
         beast::expire(byLedger_, parms_.validationSET_EXPIRES);
+        beast::expire(bySeq_, parms_.validationSET_EXPIRES);
     }
 
     /** Update trust status of validations
