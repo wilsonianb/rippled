@@ -322,7 +322,7 @@ class Validations
     hash_map<NodeID, Ledger> lastLedger_;
 
     // Set of ledgers being acquired from the network
-    hash_map<std::pair<Seq,ID>, hash_set<NodeID>> acquiring_;
+    hash_map<ID, hash_set<NodeID>> acquiring_;
 
     // Parameters to determine validation staleness
     ValidationParms const parms_;
@@ -337,7 +337,7 @@ private:
     removeTrie(ScopedLock const&, NodeID const& nodeID, Validation const& val)
     {
         {
-            auto it = acquiring_.find(std::make_pair(val.seq(), val.ledgerID()));
+            auto it = acquiring_.find(val.ledgerID());
             if (it != acquiring_.end())
             {
                 it->second.erase(nodeID);
@@ -362,8 +362,9 @@ private:
         for (auto it = acquiring_.begin(); it != acquiring_.end();)
         {
             if (boost::optional<Ledger> ledger =
-                    adaptor_.acquire(it->first.second))
+                    adaptor_.acquire(it->first))
             {
+                // check that seq == it->first.first
                 for (NodeID const& nodeID : it->second)
                     updateTrie(lock, nodeID, *ledger);
 
@@ -381,6 +382,7 @@ private:
         auto ins = lastLedger_.emplace(nodeID, ledger);
         if (!ins.second)
         {
+            // check if these two ledgers are the same sequence
             trie_.remove(ins.first->second);
             ins.first->second = ledger;
         }
@@ -404,7 +406,7 @@ private:
         ScopedLock const& lock,
         NodeID const& nodeID,
         Validation const& val,
-        boost::optional<std::pair<Seq, ID>> prior)
+        boost::optional<ID> prior)
     {
         assert(val.trusted());
 
@@ -421,9 +423,10 @@ private:
         }
 
         checkAcquired(lock);
-
-        std::pair<Seq, ID> valPair{val.seq(), val.ledgerID()};
-        auto it = acquiring_.find(valPair);
+//why do we need the seq?
+//it could be helpful for telling if the acquired ledger proves that the validation
+//contained an erroneous seq
+        auto it = acquiring_.find(val.ledgerID());
         if (it != acquiring_.end())
         {
             it->second.insert(nodeID);
@@ -432,9 +435,10 @@ private:
         {
             if (boost::optional<Ledger> ledger =
                     adaptor_.acquire(val.ledgerID()))
+                // check the sequence
                 updateTrie(lock, nodeID, *ledger);
             else
-                acquiring_[valPair].insert(nodeID);
+                acquiring_[val.ledgerID()].insert(nodeID);
         }
     }
 
@@ -589,7 +593,9 @@ public:
     {
         if (!isCurrent(parms_, adaptor_.now(), val.signTime(), val.seenTime()))
             return ValStatus::stale;
-
+//what if val.seq() is a lie?
+//should validations include the ledger header in order to compute hash and verify sequence?
+//or should some of this sequence based logic be deferred until we have acquired the ledger?
         {
             ScopedLock lock{mutex_};
 
@@ -638,11 +644,10 @@ public:
                     (val.signTime() == oldVal.signTime() &&
                     oldVal.seq() < val.seq()))
                 {
-                    std::pair<Seq,ID> old(oldVal.seq(),oldVal.ledgerID());
                     adaptor_.onStale(std::move(oldVal));
                     ins.first->second = val;
                     if (val.trusted())
-                        updateTrie(lock, nodeID, val, old);
+                        updateTrie(lock, nodeID, val, oldVal.ledgerID());
                 }
                 else
                     return ValStatus::stale;
@@ -744,23 +749,25 @@ public:
         if (preferred.seq == Seq{0})
         {
             // fall back to majority over acquiring ledgers
-            auto it = std::max_element(
-                acquiring_.begin(),
-                acquiring_.end(),
-                [](auto const& a, auto const& b) {
-                    std::pair<Seq, ID> const& aKey = a.first;
-                    typename hash_set<NodeID>::size_type const& aSize =
-                        a.second.size();
-                    std::pair<Seq, ID> const& bKey = b.first;
-                    typename hash_set<NodeID>::size_type const& bSize =
-                        b.second.size();
-                    // order by number of trusted peers validating that ledger
-                    // break ties with ledger ID
-                    return std::tie(aSize, aKey.second) <
-                        std::tie(bSize, bKey.second);
-                });
-            if(it != acquiring_.end())
-                return it->first;
+// is it safe to use these sequences?
+            // auto it = std::max_element(
+            //     acquiring_.begin(),
+            //     acquiring_.end(),
+            //     [](auto const& a, auto const& b) {
+            //         std::pair<Seq, ID> const& aKey = a.first;
+            //         typename hash_set<NodeID>::size_type const& aSize =
+            //             a.second.size();
+            //         std::pair<Seq, ID> const& bKey = b.first;
+            //         typename hash_set<NodeID>::size_type const& bSize =
+            //             b.second.size();
+            //         // order by number of trusted peers validating that ledger
+            //         // break ties with ledger ID
+            //         return std::tie(aSize, aKey) <
+            //             std::tie(bSize, bKey);
+            //     });
+//don't use this sequence!!!!
+            // if(it != acquiring_.end())
+            //     return it->first;
             return std::make_pair(preferred.seq, preferred.id);
         }
 
@@ -797,6 +804,7 @@ public:
     getPreferred(Ledger const& curr, Seq minValidSeq)
     {
         std::pair<Seq, ID> preferred = getPreferred(curr);
+        // this uses getPreferred's returned seq
         if(preferred.first >= minValidSeq && preferred.second != ID{0})
             return preferred.second;
         return curr.id();

@@ -128,12 +128,12 @@ InboundLedger::init(ScopedLockType& collectionLock)
         execute();
         return;
     }
-
+//is this where we receive a ledger?
     JLOG (m_journal.debug()) <<
         "Acquiring ledger we already have in " <<
         " local store. " << mHash;
     mLedger->setImmutable(app_.config());
-
+//verify mLedger's hash matches mHash? what about seq?
     if (mReason == Reason::HISTORY || mReason == Reason::SHARD)
         return;
 
@@ -287,6 +287,7 @@ InboundLedger::tryDB(Family& f)
                     deserializeHeader(makeSlice(data), true),
                         app_.config(), f);
                 if (mLedger->info().hash != mHash ||
+// we would catch erroneous validation seqs here if we didn't use 0
                     (mSeq != 0 && mSeq != mLedger->info().seq))
                 {
                     // We know for a fact the ledger can never be acquired
@@ -856,6 +857,7 @@ bool InboundLedger::takeHeader (std::string const& data)
     mLedger = std::make_shared<Ledger>(deserializeHeader(
         makeSlice(data), false), app_.config(), *f);
     if (mLedger->info().hash != mHash ||
+        // we could identify bad val seqs if we don't use 0
         (mSeq != 0 && mSeq != mLedger->info().seq))
     {
         JLOG (m_journal.warn()) <<

@@ -1155,9 +1155,9 @@ class Validations_test : public beast::unit_test::suite
             auto& vals = harness.vals();
             BEAST_EXPECT(vals.currentTrusted() == trustedVals);
             BEAST_EXPECT(
-                vals.getPreferred(genesisLedger).second == v.ledgerID());
-            BEAST_EXPECT(
                 vals.getNodesAfter(genesisLedger, genesisLedger.id()) == 0);
+            BEAST_EXPECT(
+                vals.getPreferred(genesisLedger).second == v.ledgerID());
 
             trustedVals.clear();
             harness.vals().trustChanged({}, {a.nodeID()});

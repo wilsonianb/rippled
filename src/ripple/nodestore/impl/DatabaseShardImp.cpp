@@ -443,6 +443,7 @@ DatabaseShardImp::fetchLedger(uint256 const& hash, std::uint32_t seq)
     auto ledger = std::make_shared<Ledger>(
         InboundLedger::deserializeHeader(makeSlice(nObj->getData()), true),
             app_.config(), *app_.shardFamily());
+    // good, we check the hash here
     if (ledger->info().hash != hash || ledger->info().seq != seq)
     {
         JLOG(j_.error()) <<

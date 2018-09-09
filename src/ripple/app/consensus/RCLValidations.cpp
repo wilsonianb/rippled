@@ -137,12 +137,15 @@ RCLValidationsAdaptor::acquire(LedgerHash const & hash)
         app_.getJobQueue().addJob(
             jtADVANCE, "getConsensusLedger", [pApp, hash](Job&) {
                 pApp ->getInboundLedgers().acquire(
+                    // why pass seq 0?
                     hash, 0, InboundLedger::Reason::CONSENSUS);
             });
         return boost::none;
     }
 
     assert(!ledger->open() && ledger->isImmutable());
+
+    // does this mean we've computed the hash?
     assert(ledger->info().hash == hash);
 
     return RCLValidatedLedger(std::move(ledger), j_);
@@ -336,6 +339,7 @@ handleNewValidation(Application& app,
     }
     else
     {
+        //should this include the sequence?
         JLOG(j.debug()) << "Val for " << hash << " from "
                     << toBase58(TokenType::NodePublic, signingKey)
                     << " not added UNlisted";

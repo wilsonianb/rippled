@@ -313,6 +313,7 @@ Ledger::Ledger (
     , rules_{config.features}
     , info_ (info)
 {
+    // should this verify the hash?
     info_.hash = calculateLedgerHash (info_);
 }
 
@@ -341,7 +342,7 @@ void Ledger::setImmutable (Config const& config)
         info_.txHash = txMap_->getHash ().as_uint256();
         info_.accountHash = stateMap_->getHash ().as_uint256();
     }
-
+// should this first verify the hash?
     info_.hash = calculateLedgerHash (info_);
 
     mImmutable = true;

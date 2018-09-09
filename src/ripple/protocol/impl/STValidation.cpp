@@ -159,7 +159,7 @@ SOTemplate const& STValidation::getFormat ()
         {
             format.push_back (SOElement (sfFlags,           SOE_REQUIRED));
             format.push_back (SOElement (sfLedgerHash,      SOE_REQUIRED));
-            format.push_back (SOElement (sfLedgerSequence,  SOE_OPTIONAL));
+            format.push_back (SOElement (sfLedgerSequence,  SOE_REQUIRED));
             format.push_back (SOElement (sfCloseTime,       SOE_OPTIONAL));
             format.push_back (SOElement (sfLoadFee,         SOE_OPTIONAL));
             format.push_back (SOElement (sfAmendments,      SOE_OPTIONAL));
